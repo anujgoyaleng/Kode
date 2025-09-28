@@ -116,6 +116,198 @@ router.get('/', authenticate, authorize('faculty', 'admin'), validatePagination,
 });
 
 /**
+ * @route   GET /api/students/attendance
+ * @desc    Get attendance records for a student
+ * @access  Private (Student)
+ */
+// Test endpoint to check attendance data
+router.get('/attendance/debug', authenticate, authorize('student'), async (req, res) => {
+  try {
+    // Get student ID from user
+    const studentQuery = `SELECT id FROM students WHERE user_id = $1`;
+    const studentResult = await pool.query(studentQuery, [req.user.id]);
+    
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Student record not found' });
+    }
+    
+    const studentId = studentResult.rows[0].id;
+    
+    // Get all attendance records for this student
+    const attendanceQuery = `
+      SELECT a.*, u.first_name, u.last_name, u.email
+      FROM attendance a
+      JOIN users u ON a.faculty_user_id = u.id
+      WHERE a.student_id = $1
+      ORDER BY a.attendance_date DESC
+    `;
+    
+    const result = await pool.query(attendanceQuery, [studentId]);
+    
+    // Also check total attendance records in database
+    const totalAttendanceQuery = `SELECT COUNT(*) as total FROM attendance`;
+    const totalResult = await pool.query(totalAttendanceQuery);
+    
+    // Check if there are any faculty-student assignments
+    const assignmentQuery = `
+      SELECT fsa.*, u.first_name, u.last_name 
+      FROM faculty_student_assignments fsa
+      JOIN users u ON fsa.faculty_user_id = u.id
+      WHERE fsa.student_id = $1
+    `;
+    const assignmentResult = await pool.query(assignmentQuery, [studentId]);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        studentId: studentId,
+        userId: req.user.id,
+        totalRecords: result.rows.length,
+        records: result.rows,
+        totalAttendanceInDB: totalResult.rows[0].total,
+        facultyAssignments: assignmentResult.rows.length,
+        assignments: assignmentResult.rows
+      }
+    });
+  } catch (error) {
+    console.error('Debug attendance error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+router.get('/attendance', authenticate, authorize('student'), async (req, res) => {
+  try {
+    const { startDate, endDate, limit = 30 } = req.query;
+    
+    // Get student ID from user
+    const studentQuery = `SELECT id FROM students WHERE user_id = $1`;
+    const studentResult = await pool.query(studentQuery, [req.user.id]);
+    
+    if (studentResult.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Student record not found' });
+    }
+    
+    const studentId = studentResult.rows[0].id;
+    
+    let query = `
+      SELECT a.attendance_date, a.status, a.created_at,
+             u.first_name as faculty_first_name, u.last_name as faculty_last_name,
+             u.id as faculty_user_id
+      FROM attendance a
+      JOIN users u ON a.faculty_user_id = u.id
+      WHERE a.student_id = $1
+    `;
+    
+    const params = [studentId];
+    
+    if (startDate) {
+      params.push(startDate);
+      query += ` AND a.attendance_date >= $${params.length}`;
+    }
+    
+    if (endDate) {
+      params.push(endDate);
+      query += ` AND a.attendance_date <= $${params.length}`;
+    }
+    
+    query += ` ORDER BY a.attendance_date DESC, a.created_at DESC`;
+    
+    const result = await pool.query(query, params);
+    
+    console.log('Raw attendance data from database:', result.rows.length, 'records');
+    console.log('Sample records:', result.rows.slice(0, 3));
+    
+    // Group attendance by date and combine multiple faculty records
+    const attendanceByDate = {};
+    const facultyAttendance = {};
+    
+    result.rows.forEach(row => {
+      const date = row.attendance_date;
+      const facultyId = row.faculty_user_id;
+      const facultyName = `${row.faculty_first_name} ${row.faculty_last_name}`;
+      
+      // Group by date for overall attendance
+      if (!attendanceByDate[date]) {
+        attendanceByDate[date] = {
+          date: date,
+          status: row.status,
+          created_at: row.created_at,
+          faculties: []
+        };
+      }
+      
+      // Add faculty info to the date record
+      attendanceByDate[date].faculties.push({
+        faculty_id: facultyId,
+        faculty_name: facultyName,
+        status: row.status,
+        created_at: row.created_at
+      });
+      
+      // Group by faculty for individual faculty attendance
+      if (!facultyAttendance[facultyId]) {
+        facultyAttendance[facultyId] = {
+          faculty_name: facultyName,
+          attendance: {}
+        };
+      }
+      
+      facultyAttendance[facultyId].attendance[date] = {
+        status: row.status,
+        created_at: row.created_at
+      };
+    });
+    
+    // Convert to arrays and calculate statistics
+    const combinedAttendance = Object.values(attendanceByDate);
+    
+    // Calculate statistics based on individual faculty records, not unique dates
+    let totalRecords = 0;
+    let presentRecords = 0;
+    let absentRecords = 0;
+    
+    result.rows.forEach(row => {
+      totalRecords++;
+      if (row.status === 'present') {
+        presentRecords++;
+      } else if (row.status === 'absent') {
+        absentRecords++;
+      }
+    });
+    
+    const attendancePercentage = totalRecords > 0 ? Math.round((presentRecords / totalRecords) * 100) : 0;
+    
+    console.log('Student attendance API response:', {
+      combinedAttendance: combinedAttendance.length,
+      facultyAttendance: Object.keys(facultyAttendance).length,
+      statistics: {
+        totalDays: totalRecords,
+        presentDays: presentRecords,
+        absentDays: absentRecords,
+        attendancePercentage
+      }
+    });
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        attendance: combinedAttendance,
+        facultyAttendance: facultyAttendance,
+        statistics: {
+          totalDays: totalRecords,
+          presentDays: presentRecords,
+          absentDays: absentRecords,
+          attendancePercentage
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Get student attendance error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
  * @route   GET /api/students/:id
  * @desc    Get student profile by ID
  * @access  Private

@@ -14,7 +14,7 @@ const router = express.Router();
  */
 router.post('/register', validateUserRegistration, async (req, res) => {
   try {
-    const { email, password, firstName, lastName, role, phone, department } = req.body;
+    const { email, password, firstName, lastName, role, phone, department, batch } = req.body;
 
     // Check if user already exists
     const existingUser = await pool.query(
@@ -35,9 +35,9 @@ router.post('/register', validateUserRegistration, async (req, res) => {
 
     // Create user
     const userQuery = `
-      INSERT INTO users (email, password, first_name, last_name, role, phone, department)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-      RETURNING id, email, role, first_name, last_name, phone, department, created_at
+      INSERT INTO users (email, password, first_name, last_name, role, phone, department, is_active)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      RETURNING id, email, role, first_name, last_name, phone, department, is_active, created_at
     `;
 
     const result = await pool.query(userQuery, [
@@ -47,10 +47,14 @@ router.post('/register', validateUserRegistration, async (req, res) => {
       lastName,
       role,
       phone || null,
-      department || null
+      department || null,
+      // Require approval for students; auto-activate faculty/admin
+      role === 'student' ? false : true
     ]);
 
     const user = result.rows[0];
+
+    // Do not auto-create student record here since roll_number is required.
 
     // Generate tokens
     const tokenPayload = {
@@ -74,6 +78,7 @@ router.post('/register', validateUserRegistration, async (req, res) => {
           role: user.role,
           phone: user.phone,
           department: user.department,
+          isActive: user.is_active,
           createdAt: user.created_at
         },
         token,
@@ -87,6 +92,40 @@ router.post('/register', validateUserRegistration, async (req, res) => {
       status: 'error',
       message: 'Internal server error during registration'
     });
+  }
+});
+
+/**
+ * @route   GET /api/auth/lookup
+ * @desc    Lookup a user by email (for pre-login greeting)
+ * @access  Public
+ */
+router.get('/lookup', async (req, res) => {
+  try {
+    const email = (req.query.email || '').toLowerCase();
+    if (!email) {
+      return res.status(400).json({ status: 'error', message: 'Email is required' });
+    }
+    const result = await pool.query(
+      'SELECT first_name, last_name, role, is_active FROM users WHERE email = $1',
+      [email]
+    );
+    if (result.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+    const row = result.rows[0];
+    return res.status(200).json({
+      status: 'success',
+      data: {
+        firstName: row.first_name,
+        lastName: row.last_name,
+        role: row.role,
+        isActive: row.is_active
+      }
+    });
+  } catch (error) {
+    console.error('Lookup error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
 

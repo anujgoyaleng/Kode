@@ -1,0 +1,6 @@
+- [ ] Replace all "dark:text-black-400" with "dark:text-gray-400"
+- [ ] Fix legend colors: change present to green, add absent red
+- [ ] Remove unused getDotColor function
+- [ ] Improve dark mode contrast for summary header text
+- [ ] Adjust dot colors in dark mode for better visibility
+- [ ] Test dark theme adaptation

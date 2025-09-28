@@ -221,12 +221,323 @@ router.get('/students', authenticate, authorize('faculty', 'admin'), validatePag
 });
 
 /**
+ * @route   GET /api/faculty/my-students
+ * @desc    Get students assigned to the logged-in faculty, with optional section filter
+ * @access  Private (Faculty)
+ */
+router.get('/my-students', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const section = req.query.section;
+    const normalizedSection = section ? section.toUpperCase() : null;
+
+    let query = `
+      SELECT s.id, s.roll_number, s.batch, s.semester, s.section,
+             u.first_name, u.last_name, u.email, u.phone, u.department
+      FROM faculty_student_assignments fsa
+      JOIN students s ON fsa.student_id = s.id
+      JOIN users u ON s.user_id = u.id
+      WHERE fsa.faculty_user_id = $1 AND u.is_active = true
+    `;
+    const params = [req.user.id];
+    if (normalizedSection) {
+      params.push(normalizedSection);
+      query += ` AND s.section = $${params.length}`;
+    }
+    query += ` ORDER BY u.first_name, u.last_name`;
+
+    const result = await pool.query(query, params);
+    res.status(200).json({
+      status: 'success',
+      data: {
+        students: result.rows.map(r => ({
+          id: r.id,
+          rollNumber: r.roll_number,
+          batch: r.batch,
+          semester: r.semester,
+          section: r.section,
+          firstName: r.first_name,
+          lastName: r.last_name,
+          email: r.email,
+          phone: r.phone,
+          department: r.department
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Get my-students error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   GET /api/faculty/attendance
+ * @desc    Get attendance for assigned students for a given date (and optional section/semester)
+ * @access  Private (Faculty)
+ */
+router.get('/attendance', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const { date, section, semester, batch } = req.query;
+    let attendanceDate = date || new Date().toISOString().slice(0,10);
+    
+    // Validate the date if provided
+    if (date) {
+      const testDate = new Date(date);
+      if (isNaN(testDate.getTime())) {
+        return res.status(400).json({ 
+          status: 'error', 
+          message: 'Invalid date format. Please provide a valid date in YYYY-MM-DD format.' 
+        });
+      }
+      attendanceDate = testDate.toISOString().slice(0,10);
+    }
+    
+    const normalizedSection = section ? section.toUpperCase() : null;
+
+    let query = `
+      SELECT s.id as student_id, s.roll_number, s.section, s.semester, s.batch,
+             u.first_name, u.last_name,
+             a.status
+      FROM faculty_student_assignments fsa
+      JOIN students s ON fsa.student_id = s.id
+      JOIN users u ON s.user_id = u.id
+      LEFT JOIN attendance a ON a.student_id = s.id AND a.faculty_user_id = fsa.faculty_user_id AND a.attendance_date = $1
+      WHERE fsa.faculty_user_id = $2 AND u.is_active = true
+    `;
+    const params = [attendanceDate, req.user.id];
+    if (batch) {
+      params.push(batch);
+      query += ` AND s.batch = $${params.length}`;
+    }
+    if (normalizedSection) {
+      params.push(normalizedSection);
+      query += ` AND s.section = $${params.length}`;
+    }
+    if (semester) {
+      params.push(semester);
+      query += ` AND s.semester = $${params.length}`;
+    }
+    query += ` ORDER BY u.first_name, u.last_name`;
+
+    const result = await pool.query(query, params);
+    res.status(200).json({
+      status: 'success',
+      data: {
+        date: attendanceDate,
+        entries: result.rows.map(r => ({
+          studentId: r.student_id,
+          rollNumber: r.roll_number,
+          section: r.section,
+          semester: r.semester,
+          batch: r.batch,
+          firstName: r.first_name,
+          lastName: r.last_name,
+          status: r.status || null
+        }))
+      }
+    });
+  } catch (error) {
+    console.error('Get attendance error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   PUT /api/faculty/attendance
+ * @desc    Save attendance for assigned students for a given date
+ * @access  Private (Faculty)
+ */
+router.put('/attendance', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const { date, batch, section, entries } = req.body; // entries: [{ studentId, status }]
+    if (!date || !Array.isArray(entries)) {
+      return res.status(400).json({ status: 'error', message: 'date and entries are required' });
+    }
+
+    // Check if attendance date is more than 7 days old or in the future
+    const attendanceDate = new Date(date);
+    
+    // Validate the date
+    if (isNaN(attendanceDate.getTime())) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Invalid date format. Please provide a valid date.' 
+      });
+    }
+    
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Reset time to start of day for accurate comparison
+    attendanceDate.setHours(0, 0, 0, 0);
+    
+    const daysDifference = Math.floor((today - attendanceDate) / (1000 * 60 * 60 * 24));
+    
+    if (daysDifference > 7) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Cannot update attendance older than 7 days. You can only view attendance records older than 7 days.' 
+      });
+    }
+    
+    if (attendanceDate > today) {
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'Cannot mark attendance for future dates. You can only mark attendance for today or past dates.' 
+      });
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      // Ensure each student is assigned to this faculty
+      const studentIds = entries.map(e => e.studentId);
+      if (studentIds.length > 0) {
+        const assigned = await client.query(
+          `SELECT student_id FROM faculty_student_assignments WHERE faculty_user_id = $1 AND student_id = ANY($2::int[])`,
+          [req.user.id, studentIds]
+        );
+        const allowed = new Set(assigned.rows.map(r => r.student_id));
+        for (const sid of studentIds) {
+          if (!allowed.has(sid)) {
+            await client.query('ROLLBACK');
+            return res.status(403).json({ status: 'error', message: `Student ${sid} not assigned to you` });
+          }
+        }
+      }
+
+      for (const e of entries) {
+        if (!['present','absent'].includes(e.status)) continue;
+        await client.query(
+          `INSERT INTO attendance (student_id, faculty_user_id, attendance_date, status)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (student_id, faculty_user_id, attendance_date) DO UPDATE SET status = EXCLUDED.status, updated_at = CURRENT_TIMESTAMP`,
+          [e.studentId, req.user.id, date, e.status]
+        );
+      }
+
+      await client.query('COMMIT');
+      res.status(200).json({ status: 'success', message: 'Attendance saved' });
+    } catch (e) {
+      await client.query('ROLLBACK');
+      throw e;
+    } finally {
+      client.release();
+    }
+  } catch (error) {
+    console.error('Save attendance error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   GET /api/faculty/attendance/batches
+ * @desc    Get unique batches for assigned students
+ * @access  Private (Faculty)
+ */
+router.get('/attendance/batches', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const query = `
+      SELECT DISTINCT s.batch
+      FROM faculty_student_assignments fsa
+      JOIN students s ON fsa.student_id = s.id
+      JOIN users u ON s.user_id = u.id
+      WHERE fsa.faculty_user_id = $1 AND u.is_active = true AND s.batch IS NOT NULL
+      ORDER BY s.batch
+    `;
+    
+    const result = await pool.query(query, [req.user.id]);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        batches: result.rows.map(r => r.batch)
+      }
+    });
+  } catch (error) {
+    console.error('Get batches error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   GET /api/faculty/attendance/sections
+ * @desc    Get unique sections for assigned students in a specific batch
+ * @access  Private (Faculty)
+ */
+router.get('/attendance/sections', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const { batch } = req.query;
+    if (!batch) {
+      return res.status(400).json({ status: 'error', message: 'batch parameter is required' });
+    }
+
+    const query = `
+      SELECT DISTINCT s.section
+      FROM faculty_student_assignments fsa
+      JOIN students s ON fsa.student_id = s.id
+      JOIN users u ON s.user_id = u.id
+      WHERE fsa.faculty_user_id = $1 AND u.is_active = true AND s.batch = $2 AND s.section IS NOT NULL
+      ORDER BY s.section
+    `;
+    
+    const result = await pool.query(query, [req.user.id, batch]);
+    
+    res.status(200).json({
+      status: 'success',
+      data: {
+        sections: result.rows.map(r => r.section)
+      }
+    });
+  } catch (error) {
+    console.error('Get sections error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   GET /api/faculty/test-auth
+ * @desc    Test authentication endpoint
+ * @access  Private (Faculty/Admin)
+ */
+router.get('/test-auth', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'Authentication working',
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role
+    }
+  });
+});
+
+/**
+ * @route   GET /api/faculty/check-user
+ * @desc    Check current user info (no role restriction)
+ * @access  Private (Any authenticated user)
+ */
+router.get('/check-user', authenticate, async (req, res) => {
+  res.json({
+    status: 'success',
+    message: 'User info retrieved',
+    user: {
+      id: req.user.id,
+      email: req.user.email,
+      role: req.user.role,
+      firstName: req.user.first_name,
+      lastName: req.user.last_name,
+      isActive: req.user.is_active
+    }
+  });
+});
+
+/**
  * @route   GET /api/faculty/verifications
  * @desc    Get pending verifications
  * @access  Private (Faculty/Admin)
  */
 router.get('/verifications', authenticate, authorize('faculty', 'admin'), validatePagination, async (req, res) => {
   try {
+    console.log('Verifications endpoint accessed by user:', req.user?.id, 'with role:', req.user?.role);
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
@@ -587,6 +898,100 @@ router.get('/reports/students', authenticate, authorize('faculty', 'admin'), asy
       status: 'error',
       message: 'Internal server error'
     });
+  }
+});
+
+/**
+ * @route   POST /api/faculty/students
+ * @desc    Create a student profile for a given user (admin/faculty)
+ * @access  Private (Faculty/Admin)
+ */
+router.post('/students', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const { userId, rollNumber, batch, semester, cgpa, bio, linkedinUrl, githubUrl, portfolioUrl } = req.body;
+
+    if (!userId || !rollNumber) {
+      return res.status(400).json({ status: 'error', message: 'userId and rollNumber are required' });
+    }
+
+    // Check if user exists
+    const userExists = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userExists.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'User not found' });
+    }
+
+    // If student already exists, return conflict
+    const existing = await pool.query('SELECT id FROM students WHERE user_id = $1', [userId]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ status: 'error', message: 'Student profile already exists' });
+    }
+
+    const insertQuery = `
+      INSERT INTO students (user_id, roll_number, batch, semester, cgpa, bio, linkedin_url, github_url, portfolio_url)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      RETURNING *
+    `;
+    const result = await pool.query(insertQuery, [
+      userId, rollNumber, batch || null, semester || null, cgpa || null,
+      bio || null, linkedinUrl || null, githubUrl || null, portfolioUrl || null
+    ]);
+
+    res.status(201).json({ status: 'success', data: { student: result.rows[0] } });
+  } catch (error) {
+    console.error('Faculty create student error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   PUT /api/faculty/students/:id/profile
+ * @desc    Create or update a student's basic profile (admin/faculty)
+ * @access  Private (Faculty/Admin)
+ */
+router.put('/students/:id/profile', authenticate, authorize('faculty', 'admin'), async (req, res) => {
+  try {
+    const studentId = req.params.id;
+    const { rollNumber, batch, semester, cgpa, bio, linkedinUrl, githubUrl, portfolioUrl, section } = req.body;
+
+    // Check if student exists
+    const existing = await pool.query('SELECT id FROM students WHERE id = $1', [studentId]);
+    if (existing.rows.length === 0) {
+      return res.status(404).json({ status: 'error', message: 'Student not found' });
+    }
+
+    const updateQuery = `
+      UPDATE students
+      SET roll_number = COALESCE($1, roll_number),
+          batch = COALESCE($2, batch),
+          semester = COALESCE($3, semester),
+          cgpa = COALESCE($4, cgpa),
+          bio = COALESCE($5, bio),
+          linkedin_url = COALESCE($6, linkedin_url),
+          github_url = COALESCE($7, github_url),
+          portfolio_url = COALESCE($8, portfolio_url),
+          section = COALESCE($9, section),
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = $10
+      RETURNING *
+    `;
+
+    const result = await pool.query(updateQuery, [
+      rollNumber || null,
+      batch || null,
+      semester || null,
+      cgpa || null,
+      bio || null,
+      linkedinUrl || null,
+      githubUrl || null,
+      portfolioUrl || null,
+      section || null,
+      studentId
+    ]);
+
+    res.status(200).json({ status: 'success', data: { student: result.rows[0] } });
+  } catch (error) {
+    console.error('Faculty update student profile error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
 

@@ -12,6 +12,9 @@ const studentRoutes = require('./routes/students');
 const facultyRoutes = require('./routes/faculty');
 const analyticsRoutes = require('./routes/analytics');
 const uploadRoutes = require('./routes/upload');
+const dashboardRoutes = require('./routes/dashboardRoutes');
+const assignmentRoutes = require('./routes/assignments');
+const mentorRoutes = require('./routes/mentors');
 
 const { connectDB } = require('./config/database');
 const { errorHandler } = require('./middleware/errorHandler');
@@ -76,6 +79,9 @@ app.use('/api/students', studentRoutes);
 app.use('/api/faculty', facultyRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/assignments', assignmentRoutes);
+app.use('/api/mentors', mentorRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

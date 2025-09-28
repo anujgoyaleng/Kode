@@ -16,12 +16,13 @@ router.get('/', authenticate, authorize('admin'), validatePagination, async (req
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const offset = (page - 1) * limit;
-    const role = req.query.role;
+  const role = req.query.role;
+  const search = req.query.search;
 
     let query = `
       SELECT u.id, u.email, u.role, u.first_name, u.last_name, 
              u.phone, u.department, u.is_active, u.created_at,
-             s.id as student_id, s.roll_number, s.batch, s.semester
+             s.id as student_id, s.roll_number, s.batch, s.semester, s.section
       FROM users u
       LEFT JOIN students s ON u.id = s.user_id
     `;
@@ -32,6 +33,11 @@ router.get('/', authenticate, authorize('admin'), validatePagination, async (req
     if (role) {
       conditions.push(`u.role = $${queryParams.length + 1}`);
       queryParams.push(role);
+    }
+
+    if (search) {
+      conditions.push(`(u.first_name ILIKE $${queryParams.length + 1} OR u.last_name ILIKE $${queryParams.length + 1} OR u.email ILIKE $${queryParams.length + 1})`);
+      queryParams.push(`%${search}%`);
     }
 
     if (conditions.length > 0) {
@@ -45,10 +51,20 @@ router.get('/', authenticate, authorize('admin'), validatePagination, async (req
 
     // Get total count
     let countQuery = 'SELECT COUNT(*) FROM users u';
+    const countParams = [];
+    const countConds = [];
     if (role) {
-      countQuery += ' WHERE u.role = $1';
+      countConds.push(`u.role = $${countParams.length + 1}`);
+      countParams.push(role);
     }
-    const countResult = await pool.query(countQuery, role ? [role] : []);
+    if (search) {
+      countConds.push(`(u.first_name ILIKE $${countParams.length + 1} OR u.last_name ILIKE $${countParams.length + 1} OR u.email ILIKE $${countParams.length + 1})`);
+      countParams.push(`%${search}%`);
+    }
+    if (countConds.length > 0) {
+      countQuery += ` WHERE ${countConds.join(' AND ')}`;
+    }
+    const countResult = await pool.query(countQuery, countParams);
     const total = parseInt(countResult.rows[0].count);
 
     res.status(200).json({
@@ -67,7 +83,8 @@ router.get('/', authenticate, authorize('admin'), validatePagination, async (req
           studentId: user.student_id,
           rollNumber: user.roll_number,
           batch: user.batch,
-          semester: user.semester
+          semester: user.semester,
+          section: user.section
         })),
         pagination: {
           currentPage: page,
@@ -146,7 +163,8 @@ router.get('/:id', authenticate, validateId, async (req, res) => {
           bio: user.bio,
           linkedinUrl: user.linkedin_url,
           githubUrl: user.github_url,
-          portfolioUrl: user.portfolio_url
+          portfolioUrl: user.portfolio_url,
+          section: user.section
         }
       }
     });
@@ -325,6 +343,14 @@ router.put('/:id/status', authenticate, authorize('admin'), validateId, async (r
       return res.status(400).json({
         status: 'error',
         message: 'isActive must be a boolean value'
+      });
+    }
+
+    // Prevent admin from deactivating themselves
+    if (req.user.id === parseInt(userId)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'You cannot deactivate your own account'
       });
     }
 

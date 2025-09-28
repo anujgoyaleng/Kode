@@ -1,0 +1,274 @@
+@import 'bootstrap/dist/css/bootstrap.min.css';
+@import 'bootstrap-icons/font/bootstrap-icons.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base styles with dark mode support */
+@layer base {
+	html {
+		font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+	}
+	
+	body {
+		@apply bg-white dark:bg-pureblack text-gray-900 dark:text-white transition-colors duration-200;
+		margin: 0;
+		background-color: #ffffff;
+	}
+	
+	.dark body {
+		background-color: #000000 !important;
+	}
+	
+	/* App container background fix */
+	.app-container {
+		background-color: #ffffff !important;
+	}
+	
+	.dark .app-container {
+		background-color: #000000 !important;
+	}
+	
+	/* StatCard dark mode fix */
+	.stat-card {
+		background-color: #ffffff !important;
+	}
+	
+	.dark .stat-card {
+		background-color: #171717 !important;
+	}
+	
+	/* Smooth transitions for theme changes */
+	* {
+		@apply transition-colors duration-200;
+	}
+	
+	/* Custom scrollbar for dark mode */
+	::-webkit-scrollbar {
+		@apply w-2;
+	}
+	
+	::-webkit-scrollbar-track {
+		@apply bg-gray-100 dark:bg-black-800;
+	}
+	
+	::-webkit-scrollbar-thumb {
+		@apply bg-gray-300 dark:bg-black-600 rounded-full;
+	}
+	
+	::-webkit-scrollbar-thumb:hover {
+		@apply bg-gray-400 dark:bg-black-500;
+	}
+}
+
+@layer components {
+	.container {
+		@apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+	}
+	
+	/* Card component with glassmorphism effect */
+	.card {
+		@apply bg-white dark:bg-black-900/80 border border-gray-200 dark:border-black-700 rounded-lg shadow-sm dark:backdrop-blur-md dark:shadow-2xl;
+	}
+	
+	/* Button variants with glow effects */
+	.btn-primary {
+		@apply bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 dark:focus:ring-offset-black-800 dark:hover:shadow-lg dark:hover:shadow-primary-500/25;
+	}
+	
+	.btn-secondary {
+		@apply bg-gray-100 hover:bg-gray-200 dark:bg-black-800 dark:hover:bg-black-700 text-gray-900 dark:text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 dark:focus:ring-offset-black-800 dark:border dark:border-black-600;
+	}
+	
+	.btn-danger {
+		@apply bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 dark:focus:ring-offset-black-800 dark:hover:shadow-lg dark:hover:shadow-red-500/25;
+	}
+	
+	/* Input styles with glassmorphism */
+	.input {
+		@apply w-full px-3 py-2 border border-gray-300 dark:border-black-600 rounded-lg bg-white dark:bg-black-800/50 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-black-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 dark:backdrop-blur-sm;
+	}
+	
+	/* Table styles */
+	.table {
+		@apply w-full border-collapse;
+	}
+	
+	.table th {
+		@apply bg-gray-50 dark:bg-black-800 border-b border-gray-200 dark:border-black-700 px-4 py-3 text-left text-sm font-medium text-gray-900 dark:text-white;
+	}
+	
+	.table td {
+		@apply border-b border-gray-200 dark:border-black-700 px-4 py-3 text-sm text-gray-900 dark:text-white;
+	}
+	
+	.table tbody tr:hover {
+		@apply bg-gray-50 dark:bg-black-800/50;
+	}
+}
+
+/* Bootstrap Dark Theme Overrides */
+@layer utilities {
+	/* Override Bootstrap's default dark theme with pure black */
+	.dark .bg-dark {
+		background-color: #000000 !important;
+	}
+	
+	.dark .bg-secondary {
+		background-color: #171717 !important;
+	}
+	
+	.dark .text-dark {
+		color: #ffffff !important;
+	}
+	
+	.dark .border-dark {
+		border-color: #404040 !important;
+	}
+	
+	/* Bootstrap navbar dark theme with glassmorphism */
+	.dark .navbar-dark {
+		background-color: rgba(0, 0, 0, 0.8) !important;
+		border-color: #404040 !important;
+		backdrop-filter: blur(12px) !important;
+	}
+	
+	.dark .navbar-dark .navbar-nav .nav-link {
+		color: #ffffff !important;
+	}
+	
+	.dark .navbar-dark .navbar-nav .nav-link:hover {
+		color: #0ea5e9 !important;
+	}
+	
+	/* Bootstrap card dark theme with glassmorphism */
+	.dark .card {
+		background-color: rgba(23, 23, 23, 0.8) !important;
+		border-color: #404040 !important;
+		color: #ffffff !important;
+		backdrop-filter: blur(8px) !important;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+	}
+	
+	/* Bootstrap form controls dark theme */
+	.dark .form-control {
+		background-color: rgba(23, 23, 23, 0.5) !important;
+		border-color: #404040 !important;
+		color: #ffffff !important;
+		backdrop-filter: blur(4px) !important;
+	}
+	
+	.dark .form-control:focus {
+		background-color: rgba(23, 23, 23, 0.7) !important;
+		border-color: #0ea5e9 !important;
+		color: #ffffff !important;
+		box-shadow: 0 0 0 0.2rem rgba(14, 165, 233, 0.25) !important;
+	}
+	
+	.dark .form-control::placeholder {
+		color: #737373 !important;
+	}
+	
+	/* Native select element dark theme */
+	.dark select {
+		background-color: rgba(23, 23, 23, 0.8) !important;
+		border-color: #404040 !important;
+		color: #ffffff !important;
+	}
+	
+	.dark select option {
+		background-color: rgba(23, 23, 23, 0.9) !important;
+		color: #ffffff !important;
+	}
+	
+	.dark select:focus {
+		border-color: #0ea5e9 !important;
+		box-shadow: 0 0 0 0.2rem rgba(14, 165, 233, 0.25) !important;
+	}
+	
+	/* Bootstrap dropdown dark theme */
+	.dark .dropdown-menu {
+		background-color: rgba(23, 23, 23, 0.9) !important;
+		border-color: #404040 !important;
+		backdrop-filter: blur(12px) !important;
+		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+	}
+	
+	.dark .dropdown-item {
+		color: #ffffff !important;
+	}
+	
+	.dark .dropdown-item:hover {
+		background-color: rgba(64, 64, 64, 0.3) !important;
+		color: #ffffff !important;
+	}
+	
+	/* Custom navbar dropdowns dark theme */
+	.dark .navbar-dropdown {
+		background-color: #111827 !important;
+		border-color: #374151 !important;
+		color: #ffffff !important;
+	}
+	
+	.dark .navbar-dropdown-item {
+		color: #e5e7eb !important;
+	}
+	
+	.dark .navbar-dropdown-item:hover {
+		background-color: #1f2937 !important;
+		color: #ffffff !important;
+	}
+	
+	/* Bootstrap modal dark theme */
+	.dark .modal-content {
+		background-color: rgba(23, 23, 23, 0.9) !important;
+		border-color: #404040 !important;
+		color: #ffffff !important;
+		backdrop-filter: blur(16px) !important;
+		box-shadow: 0 16px 64px rgba(0, 0, 0, 0.5) !important;
+	}
+	
+	.dark .modal-header {
+		border-color: #404040 !important;
+	}
+	
+	.dark .modal-footer {
+		border-color: #404040 !important;
+	}
+	
+	/* Bootstrap table dark theme */
+	.dark .table {
+		color: #ffffff !important;
+	}
+	
+	.dark .table-striped tbody tr:nth-of-type(odd) {
+		background-color: rgba(255, 255, 255, 0.03) !important;
+	}
+	
+	.dark .table-hover tbody tr:hover {
+		background-color: rgba(255, 255, 255, 0.08) !important;
+	}
+	
+	/* Custom grid columns for attendance dashboard */
+	.grid-cols-14 {
+		grid-template-columns: repeat(14, minmax(0, 1fr));
+	}
+	
+	.grid-cols-16 {
+		grid-template-columns: repeat(16, minmax(0, 1fr));
+	}
+	
+	.grid-cols-18 {
+		grid-template-columns: repeat(18, minmax(0, 1fr));
+	}
+	
+	.grid-cols-20 {
+		grid-template-columns: repeat(20, minmax(0, 1fr));
+	}
+	
+	.grid-cols-22 {
+		grid-template-columns: repeat(22, minmax(0, 1fr));
+	}
+}
+
+

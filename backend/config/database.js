@@ -58,6 +58,7 @@ const initializeTables = async () => {
         id SERIAL PRIMARY KEY,
         user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
         roll_number VARCHAR(50) UNIQUE NOT NULL,
+        section VARCHAR(50),
         batch VARCHAR(20),
         semester INTEGER,
         cgpa DECIMAL(3,2),
@@ -69,6 +70,9 @@ const initializeTables = async () => {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     `);
+
+    // Ensure section column exists on existing deployments where students table was created earlier
+    await client.query(`ALTER TABLE students ADD COLUMN IF NOT EXISTS section VARCHAR(50)`);
 
     // Academic achievements table
     await client.query(`
@@ -160,15 +164,56 @@ const initializeTables = async () => {
       )
     `);
 
+    // Faculty-Student assignments (many-to-many: students -> multiple faculty users)
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS faculty_student_assignments (
+        id SERIAL PRIMARY KEY,
+        student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        faculty_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (student_id, faculty_user_id)
+      )
+    `);
+
     // Create indexes for better performance
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_students_user_id ON students(user_id);
       CREATE INDEX IF NOT EXISTS idx_students_roll_number ON students(roll_number);
+      CREATE INDEX IF NOT EXISTS idx_students_section ON students(section);
       CREATE INDEX IF NOT EXISTS idx_academic_achievements_student_id ON academic_achievements(student_id);
       CREATE INDEX IF NOT EXISTS idx_extracurricular_activities_student_id ON extracurricular_activities(student_id);
       CREATE INDEX IF NOT EXISTS idx_projects_student_id ON projects(student_id);
       CREATE INDEX IF NOT EXISTS idx_skills_student_id ON skills(student_id);
       CREATE INDEX IF NOT EXISTS idx_certificates_student_id ON certificates(student_id);
+      CREATE INDEX IF NOT EXISTS idx_fsa_student_id ON faculty_student_assignments(student_id);
+      CREATE INDEX IF NOT EXISTS idx_fsa_faculty_user_id ON faculty_student_assignments(faculty_user_id);
+    `);
+
+    // Attendance table
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS attendance (
+        id SERIAL PRIMARY KEY,
+        student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+        faculty_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        attendance_date DATE NOT NULL,
+        status VARCHAR(10) NOT NULL CHECK (status IN ('present','absent')),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(student_id, faculty_user_id, attendance_date)
+      )
+    `);
+    await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_attendance_faculty_date ON attendance(faculty_user_id, attendance_date);
+      CREATE INDEX IF NOT EXISTS idx_attendance_student_date ON attendance(student_id, attendance_date);
+    `);
+
+    // Section mentors mapping: one mentor faculty per section
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS section_mentors (
+        section VARCHAR(50) PRIMARY KEY,
+        faculty_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE SET NULL,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
     `);
 
     client.release();

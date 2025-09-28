@@ -212,7 +212,8 @@ router.get('/achievements', authenticate, authorize('faculty', 'admin'), async (
       SELECT 
         COUNT(*) as total_achievements,
         COUNT(CASE WHEN is_verified = true THEN 1 END) as verified_achievements,
-        COUNT(CASE WHEN is_verified = false THEN 1 END) as pending_achievements
+        COUNT(CASE WHEN is_verified = false AND verified_by IS NULL THEN 1 END) as pending_achievements,
+        COUNT(CASE WHEN is_verified = false AND verified_by IS NOT NULL THEN 1 END) as rejected_achievements
       FROM academic_achievements
     `;
     const verificationStatsResult = await pool.query(verificationStatsQuery);
@@ -254,7 +255,8 @@ router.get('/achievements', authenticate, authorize('faculty', 'admin'), async (
           verificationStats: {
             total: parseInt(verificationStatsResult.rows[0].total_achievements),
             verified: parseInt(verificationStatsResult.rows[0].verified_achievements),
-            pending: parseInt(verificationStatsResult.rows[0].pending_achievements)
+            pending: parseInt(verificationStatsResult.rows[0].pending_achievements),
+            rejected: parseInt(verificationStatsResult.rows[0].rejected_achievements)
           },
           yearDistribution: yearStatsResult.rows.map(stat => ({
             year: stat.year,
@@ -487,7 +489,7 @@ router.get('/skills', authenticate, authorize('faculty', 'admin'), async (req, r
       SELECT 
         COUNT(DISTINCT student_id) as students_with_skills,
         COUNT(*) as total_skills,
-        ROUND(AVG(skill_count), 2) as avg_skills_per_student
+        CAST(AVG(skill_count) AS DECIMAL(5,2)) as avg_skills_per_student
       FROM (
         SELECT student_id, COUNT(*) as skill_count
         FROM skills
@@ -633,6 +635,129 @@ router.get('/trends', authenticate, authorize('faculty', 'admin'), async (req, r
       status: 'error',
       message: 'Internal server error'
     });
+  }
+});
+
+/**
+ * @route   GET /api/analytics/faculty-attendance-summary
+ * @desc    Get faculty attendance summary for dashboard
+ * @access  Private (Admin/Faculty)
+ */
+router.get('/faculty-attendance-summary', authenticate, authorize('admin', 'faculty'), async (req, res) => {
+  try {
+    const query = `
+      SELECT 
+        u.id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        COUNT(DISTINCT fsa.student_id) as total_students,
+        COUNT(DISTINCT a.attendance_date) as days_marked,
+        COUNT(CASE WHEN a.status = 'present' THEN 1 END) as total_present,
+        COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as total_absent,
+        CAST(
+          CASE 
+            WHEN COUNT(CASE WHEN a.status IN ('present', 'absent') THEN 1 END) > 0 
+            THEN (COUNT(CASE WHEN a.status = 'present' THEN 1 END)::float / 
+                  COUNT(CASE WHEN a.status IN ('present', 'absent') THEN 1 END) * 100)
+            ELSE 0 
+          END AS DECIMAL(5,2)
+        ) as attendance_percentage
+      FROM users u
+      LEFT JOIN faculty_student_assignments fsa ON u.id = fsa.faculty_user_id
+      LEFT JOIN attendance a ON fsa.student_id = a.student_id AND fsa.faculty_user_id = a.faculty_user_id
+      WHERE u.role = 'faculty' AND u.is_active = true
+      GROUP BY u.id, u.first_name, u.last_name, u.email
+      ORDER BY attendance_percentage DESC, u.first_name, u.last_name
+    `;
+
+    const result = await pool.query(query);
+    
+    // Get recent attendance for each faculty (last 14 days)
+    const facultiesWithRecentData = await Promise.all(
+      result.rows.map(async (faculty) => {
+        const recentQuery = `
+          SELECT a.status
+          FROM attendance a
+          JOIN faculty_student_assignments fsa ON a.student_id = fsa.student_id AND a.faculty_user_id = fsa.faculty_user_id
+          WHERE fsa.faculty_user_id = $1
+          AND a.attendance_date >= CURRENT_DATE - INTERVAL '14 days'
+          ORDER BY a.attendance_date DESC
+          LIMIT 14
+        `;
+        
+        const recentResult = await pool.query(recentQuery, [faculty.id]);
+        const recentAttendance = recentResult.rows.map(row => row.status);
+        
+        return {
+          id: faculty.id,
+          firstName: faculty.first_name,
+          lastName: faculty.last_name,
+          email: faculty.email,
+          totalStudents: parseInt(faculty.total_students) || 0,
+          daysMarked: parseInt(faculty.days_marked) || 0,
+          totalPresent: parseInt(faculty.total_present) || 0,
+          totalAbsent: parseInt(faculty.total_absent) || 0,
+          attendancePercentage: parseFloat(faculty.attendance_percentage) || 0,
+          recentAttendance
+        };
+      })
+    );
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        faculties: facultiesWithRecentData
+      }
+    });
+  } catch (error) {
+    console.error('Get faculty attendance summary error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
+
+/**
+ * @route   GET /api/analytics/faculty-attendance-details/:facultyId
+ * @desc    Get detailed attendance data for a specific faculty
+ * @access  Private (Admin/Faculty)
+ */
+router.get('/faculty-attendance-details/:facultyId', authenticate, authorize('admin', 'faculty'), async (req, res) => {
+  try {
+    const { facultyId } = req.params;
+    const { days = 30 } = req.query;
+    
+    const query = `
+      SELECT 
+        a.attendance_date,
+        COUNT(CASE WHEN a.status = 'present' THEN 1 END) as present_count,
+        COUNT(CASE WHEN a.status = 'absent' THEN 1 END) as absent_count,
+        COUNT(DISTINCT a.student_id) as total_students
+      FROM attendance a
+      JOIN faculty_student_assignments fsa ON a.student_id = fsa.student_id AND a.faculty_user_id = fsa.faculty_user_id
+      WHERE fsa.faculty_user_id = $1
+      AND a.attendance_date >= CURRENT_DATE - INTERVAL '${parseInt(days)} days'
+      GROUP BY a.attendance_date
+      ORDER BY a.attendance_date DESC
+    `;
+
+    const result = await pool.query(query, [facultyId]);
+    
+    const attendance = result.rows.map(row => ({
+      date: row.attendance_date,
+      presentCount: parseInt(row.present_count) || 0,
+      absentCount: parseInt(row.absent_count) || 0,
+      totalStudents: parseInt(row.total_students) || 0
+    }));
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        attendance
+      }
+    });
+  } catch (error) {
+    console.error('Get faculty attendance details error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
   }
 });
 

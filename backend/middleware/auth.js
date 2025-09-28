@@ -8,8 +8,10 @@ const { pool } = require('../config/database');
 const authenticate = async (req, res, next) => {
   try {
     const authHeader = req.headers.authorization;
+    console.log('Auth header:', authHeader ? 'Present' : 'Missing');
     
     if (!authHeader) {
+      console.log('No authorization header provided');
       return res.status(401).json({
         status: 'error',
         message: 'Access denied. No token provided.'
@@ -17,7 +19,9 @@ const authenticate = async (req, res, next) => {
     }
 
     const token = extractTokenFromHeader(authHeader);
+    console.log('Token extracted, length:', token.length);
     const decoded = verifyToken(token);
+    console.log('Token decoded for user ID:', decoded.id);
 
     // Get user from database
     const userQuery = `
@@ -29,8 +33,10 @@ const authenticate = async (req, res, next) => {
     `;
     
     const result = await pool.query(userQuery, [decoded.id]);
+    console.log('User query result:', result.rows.length, 'rows found');
     
     if (result.rows.length === 0) {
+      console.log('User not found in database for ID:', decoded.id);
       return res.status(401).json({
         status: 'error',
         message: 'Invalid token. User not found.'
@@ -38,6 +44,7 @@ const authenticate = async (req, res, next) => {
     }
 
     req.user = result.rows[0];
+    console.log('User authenticated:', req.user.email, 'role:', req.user.role);
     next();
   } catch (error) {
     return res.status(401).json({
@@ -53,7 +60,10 @@ const authenticate = async (req, res, next) => {
  */
 const authorize = (...allowedRoles) => {
   return (req, res, next) => {
+    console.log('Authorization check - User role:', req.user?.role, 'Allowed roles:', allowedRoles);
+    
     if (!req.user) {
+      console.log('No user found in request');
       return res.status(401).json({
         status: 'error',
         message: 'Authentication required'
@@ -61,12 +71,14 @@ const authorize = (...allowedRoles) => {
     }
 
     if (!allowedRoles.includes(req.user.role)) {
+      console.log('Access denied - User role not in allowed roles');
       return res.status(403).json({
         status: 'error',
         message: 'Access denied. Insufficient permissions.'
       });
     }
 
+    console.log('Authorization successful');
     next();
   };
 };
