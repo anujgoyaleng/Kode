@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '@/api/client'
+import { normalizeDepartment, normalizeBatch, normalizeSemester, normalizeSection } from '@/utils/normalize'
 import { useAuth } from '@/contexts/AuthContext'
 
 export default function ProfilePage() {
@@ -82,19 +83,19 @@ export default function ProfilePage() {
 		setError(null)
 		try {
 			// Update user basic info
-			await api.put(`/users/${user.id}`, {
-				firstName: profile.firstName,
-				lastName: profile.lastName,
-				phone: profile.phone,
-				department: profile.department
-			})
+            await api.put(`/users/${user.id}`, {
+                firstName: profile.firstName,
+                lastName: profile.lastName,
+                phone: profile.phone,
+                department: normalizeDepartment(profile.department)
+            })
 			// Build payload only with valid/non-empty fields to satisfy validation
 			if (!profile.rollNumber || profile.rollNumber.trim().length < 3) {
 				throw new Error('Roll number is required (min 3 chars)')
 			}
 			const studentPayload = { rollNumber: profile.rollNumber.trim() }
-			if (profile.batch && profile.batch.trim()) studentPayload.batch = profile.batch.trim()
-			if (profile.semester && !Number.isNaN(parseInt(profile.semester))) studentPayload.semester = parseInt(profile.semester)
+            if (profile.batch && profile.batch.trim()) studentPayload.batch = normalizeBatch(profile.batch)
+            if (profile.semester && !Number.isNaN(parseInt(profile.semester))) studentPayload.semester = normalizeSemester(profile.semester)
 			if (profile.cgpa && !Number.isNaN(parseFloat(profile.cgpa))) studentPayload.cgpa = parseFloat(profile.cgpa)
 			if (profile.bio && profile.bio.trim()) studentPayload.bio = profile.bio.trim()
 			if (profile.linkedinUrl && profile.linkedinUrl.trim()) studentPayload.linkedinUrl = profile.linkedinUrl.trim()
@@ -152,7 +153,7 @@ export default function ProfilePage() {
 			{error && <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-400 rounded-lg">{error}</div>}
 			{success && <div className="mb-4 p-3 bg-green-100 dark:bg-green-900/20 text-green-700 dark:text-green-400 rounded-lg">{success}</div>}
 
-            <div className="bg-white dark:bg-black-900/80 rounded-lg shadow-sm dark:shadow-2xl p-6 dark:backdrop-blur-md">
+            <div className="card p-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
 				{/* Personal Information */}
 					<div className="space-y-4">
@@ -176,28 +177,28 @@ export default function ProfilePage() {
 
 						<div>
 							<label className="block text-sm font-medium text-gray-700 dark:text-black-300 mb-1">Phone</label>
-							{isEditing ? (
-								<input
-									type="tel"
-									value={profile.phone}
-									onChange={(e) => setProfile({...profile, phone: e.target.value})}
-									className="w-full border border-gray-300 dark:border-black-600 rounded-lg px-3 py-2 bg-white dark:bg-black-800/50 text-gray-900 dark:text-white dark:backdrop-blur-sm"
-								/>
-							) : (
+                            {isEditing ? (
+                            	<input
+                            		type="tel"
+                            		value={profile.phone}
+                            		onChange={(e) => setProfile({...profile, phone: e.target.value})}
+                            		className="input"
+                            	/>
+                            ) : (
 								<p className="text-gray-900 dark:text-white">{profile.phone || 'Not set'}</p>
 							)}
 						</div>
 
 					<div>
 						<label className="block text-sm font-medium text-gray-700 dark:text-black-300 mb-1">Department</label>
-						{isEditing ? (
-							<input
-								type="text"
-								value={profile.department}
-								onChange={(e) => setProfile({...profile, department: e.target.value})}
-								className="w-full border border-gray-300 dark:border-black-600 rounded-lg px-3 py-2 bg-white dark:bg-black-800/50 text-gray-900 dark:text-white dark:backdrop-blur-sm"
-							/>
-						) : (
+                        {isEditing ? (
+                        	<input
+                        		type="text"
+                        		value={profile.department}
+                        		onChange={(e) => setProfile({...profile, department: e.target.value})}
+                        		className="input"
+                        	/>
+                        ) : (
 							<p className="text-gray-900 dark:text-white">{profile.department || 'Not set'}</p>
 						)}
 					</div>
@@ -228,14 +229,14 @@ export default function ProfilePage() {
 
 						<div>
 							<label className="block text-sm font-medium text-gray-700 dark:text-black-300 mb-1">Bio</label>
-							{isEditing ? (
-								<textarea
-									value={profile.bio}
-									onChange={(e) => setProfile({...profile, bio: e.target.value})}
-									className="w-full border border-gray-300 dark:border-black-600 rounded-lg px-3 py-2 h-24 bg-white dark:bg-black-800/50 text-gray-900 dark:text-white dark:backdrop-blur-sm"
-									placeholder="Tell us about yourself..."
-								/>
-							) : (
+                            {isEditing ? (
+                            	<textarea
+                            		value={profile.bio}
+                            		onChange={(e) => setProfile({...profile, bio: e.target.value})}
+                            		className="input h-24"
+                            		placeholder="Tell us about yourself..."
+                            	/>
+                            ) : (
 								<p className="text-gray-900 dark:text-white">{profile.bio || 'No bio added'}</p>
 							)}
 						</div>
@@ -247,15 +248,15 @@ export default function ProfilePage() {
 						<div className="grid grid-cols-1 md:grid-cols-3 gap-4">
 							<div>
 								<label className="block text-sm font-medium text-gray-700 dark:text-black-300 mb-1">LinkedIn</label>
-								{isEditing ? (
-									<input
-										type="url"
-										value={profile.linkedinUrl}
-										onChange={(e) => setProfile({...profile, linkedinUrl: e.target.value})}
-										className="w-full border border-gray-300 dark:border-black-600 rounded-lg px-3 py-2 bg-white dark:bg-black-800/50 text-gray-900 dark:text-white dark:backdrop-blur-sm"
-										placeholder="https://linkedin.com/in/yourprofile"
-									/>
-								) : (
+                                {isEditing ? (
+                                	<input
+                                		type="url"
+                                		value={profile.linkedinUrl}
+                                		onChange={(e) => setProfile({...profile, linkedinUrl: e.target.value})}
+                                		className="input"
+                                		placeholder="https://linkedin.com/in/yourprofile"
+                                	/>
+                                ) : (
 									<p className="text-gray-900 dark:text-white">
 										{profile.linkedinUrl ? (
 											<a href={profile.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-accent-400 hover:underline">
@@ -267,15 +268,15 @@ export default function ProfilePage() {
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 dark:text-black-300 mb-1">GitHub</label>
-								{isEditing ? (
-									<input
-										type="url"
-										value={profile.githubUrl}
-										onChange={(e) => setProfile({...profile, githubUrl: e.target.value})}
-										className="w-full border border-gray-300 dark:border-black-600 rounded-lg px-3 py-2 bg-white dark:bg-black-800/50 text-gray-900 dark:text-white dark:backdrop-blur-sm"
-										placeholder="https://github.com/yourusername"
-									/>
-								) : (
+                                {isEditing ? (
+                                	<input
+                                		type="url"
+                                		value={profile.githubUrl}
+                                		onChange={(e) => setProfile({...profile, githubUrl: e.target.value})}
+                                		className="input"
+                                		placeholder="https://github.com/yourusername"
+                                	/>
+                                ) : (
 									<p className="text-gray-900 dark:text-white">
 										{profile.githubUrl ? (
 											<a href={profile.githubUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-accent-400 hover:underline">
@@ -287,15 +288,15 @@ export default function ProfilePage() {
 							</div>
 							<div>
 								<label className="block text-sm font-medium text-gray-700 dark:text-black-300 mb-1">Portfolio</label>
-								{isEditing ? (
-									<input
-										type="url"
-										value={profile.portfolioUrl}
-										onChange={(e) => setProfile({...profile, portfolioUrl: e.target.value})}
-										className="w-full border border-gray-300 dark:border-black-600 rounded-lg px-3 py-2 bg-white dark:bg-black-800/50 text-gray-900 dark:text-white dark:backdrop-blur-sm"
-										placeholder="https://yourportfolio.com"
-									/>
-								) : (
+                                {isEditing ? (
+                                	<input
+                                		type="url"
+                                		value={profile.portfolioUrl}
+                                		onChange={(e) => setProfile({...profile, portfolioUrl: e.target.value})}
+                                		className="input"
+                                		placeholder="https://yourportfolio.com"
+                                	/>
+                                ) : (
 									<p className="text-gray-900 dark:text-white">
 										{profile.portfolioUrl ? (
 											<a href={profile.portfolioUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-accent-400 hover:underline">

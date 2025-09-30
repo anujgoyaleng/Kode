@@ -159,28 +159,33 @@ export default function StudentDashboard() {
 				</ResponsiveContainer>
 			</div>
 
-			{/* Achievements Manage */}
-			<div className="card rounded-2xl p-6 shadow-sm">
-				<h3 className="font-semibold mb-4 text-gray-900 dark:text-white">Achievements</h3>
-				<ul className="space-y-3">
-					{profile?.academicAchievements?.map(a => {
-						const status = a.isVerified === true ? 'Approved' : (a.isVerified === false && a.verifiedBy ? 'Rejected' : 'Pending')
-						const statusColor = status === 'Approved' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : status === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-						return (
-							<li key={a.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-black-800 rounded-lg">
-								<span className="flex items-center gap-3">
-									<span className="font-medium text-gray-900 dark:text-white">{a.title} {a.year ? `- ${a.year}` : ''}</span>
-									<span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor}`}>{status}</span>
-								</span>
-								<button onClick={async()=>{ await api.delete(`/students/${profile.student.id}/achievements/${a.id}`); const ref = await api.get(`/students/${profile.student.id}`); setProfile(ref.data.data) }} className="text-sm text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors">Remove</button>
-							</li>
-						)
-					})}
-				</ul>
-				<div className="mt-4">
-					<Link to="/upload?tab=achievement" className="btn-primary">Add Achievement</Link>
-				</div>
-			</div>
+            {/* Featured Achievements Snapshot */}
+            <div className="card rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Featured Achievements</h3>
+                    <Link to="/achievements" className="text-sm text-primary-600 dark:text-primary-400 hover:underline">View all →</Link>
+                </div>
+                <ul className="space-y-3">
+                    {(profile?.academicAchievements || []).filter(a => a.isFeatured).slice(0,3).map(a => {
+                        const status = a.isVerified === true ? 'Approved' : (a.isVerified === false && a.verifiedBy ? 'Rejected' : 'Pending')
+                        const statusColor = status === 'Approved' ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : status === 'Rejected' ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
+                        return (
+                            <li key={a.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-black-800 rounded-lg">
+                                <span className="flex items-center gap-3">
+                                    <span className="font-medium text-gray-900 dark:text-white">{a.title} {a.year ? `- ${a.year}` : ''}</span>
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusColor}`}>{status}</span>
+                                </span>
+                            </li>
+                        )
+                    })}
+                    {((profile?.academicAchievements || []).filter(a => a.isFeatured).length === 0) && (
+                        <li className="text-sm text-gray-600 dark:text-gray-400">No featured achievements yet.</li>
+                    )}
+                </ul>
+                <div className="mt-4">
+                    <Link to="/upload?tab=achievement" className="btn-primary">Add Achievement</Link>
+                </div>
+            </div>
 
 			</div>
 			<BottomNav />

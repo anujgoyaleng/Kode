@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
+import { normalizeDepartment, normalizeBatch, normalizeSemester, normalizeSection } from '@/utils/normalize'
 import api from '@/api/client'
 
 export default function AdminUsersPage() {
@@ -41,7 +42,8 @@ export default function AdminUsersPage() {
 		setCreating(true)
 		setError(null)
 		try {
-			await api.post('/auth/register', form)
+            const payload = { ...form, department: normalizeDepartment(form.department) }
+            await api.post('/auth/register', payload)
 			setForm({ email: '', password: '', firstName: '', lastName: '', phone: '', department: '', role: 'faculty' })
 			load()
 		} catch (e) {
@@ -62,7 +64,7 @@ export default function AdminUsersPage() {
 	}
 
 	if (loading) return (
-		<div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
+		<div className="min-h-screen bg-gray-50 dark:bg-pureblack flex items-center justify-center">
 			<div className="text-center">
 				<div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
 				<p className="text-gray-600 dark:text-gray-400">Loading users...</p>
@@ -70,7 +72,7 @@ export default function AdminUsersPage() {
 		</div>
 	)
 	if (error) return (
-		<div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
+		<div className="min-h-screen bg-gray-50 dark:bg-pureblack flex items-center justify-center">
 			<div className="text-center">
 				<div className="text-red-500 text-6xl mb-4">⚠️</div>
 				<p className="text-red-600 dark:text-red-400 text-lg">{error}</p>
@@ -79,7 +81,7 @@ export default function AdminUsersPage() {
 	)
 
 	return (
-		<div className="min-h-screen bg-gray-50 dark:bg-dark-900 w-full px-4 md:px-8">
+		<div className="min-h-screen bg-gray-50 dark:bg-pureblack w-full px-4 md:px-8">
 			<div className="py-6 max-w-7xl mx-auto space-y-8">
 				<div className="flex items-center justify-between">
 					<div>
@@ -138,7 +140,7 @@ export default function AdminUsersPage() {
 									<th>Actions</th>
 								</tr>
 							</thead>
-							<tbody>
+							<tbody className="text-gray-900 dark:text-white">
 								{users.map(u => (
 									<tr key={u.id}>
 										<td className="font-medium">{u.firstName} {u.lastName}</td>
@@ -204,18 +206,18 @@ function InlineEditor({ user, onSaved }) {
 	const save = async () => {
 		setSaving(true)
 		try {
-			await api.put(`/users/${user.id}`, form)
+            await api.put(`/users/${user.id}`, { ...form, department: normalizeDepartment(form.department) })
 			if (user.role === 'student' && (stu.rollNumber || stu.batch || stu.semester || stu.cgpa || stu.section)) {
 				const userDetail = await api.get(`/users/${user.id}`)
 				const studentId = userDetail.data.data.user.studentId
 				if (studentId) {
-					await api.put(`/faculty/students/${studentId}/profile`, {
-						rollNumber: stu.rollNumber || null,
-						batch: stu.batch || null,
-						semester: stu.semester ? parseInt(stu.semester) : null,
-						cgpa: stu.cgpa ? parseFloat(stu.cgpa) : null,
-						section: stu.section || null
-					})
+                    await api.put(`/faculty/students/${studentId}/profile`, {
+                        rollNumber: stu.rollNumber || null,
+                        batch: normalizeBatch(stu.batch) || null,
+                        semester: normalizeSemester(stu.semester),
+                        cgpa: stu.cgpa ? parseFloat(stu.cgpa) : null,
+                        section: normalizeSection(stu.section) || null
+                    })
 				}
 			}
 			onSaved()
@@ -226,8 +228,8 @@ function InlineEditor({ user, onSaved }) {
 	return (
 		<span className="inline-block">
 			<button onClick={() => setOpen(o=>!o)} className="btn-secondary text-xs">{open?'Close':'Edit'}</button>
-			{open && (
-				<div className="mt-2 p-4 border border-gray-200 dark:border-dark-700 rounded-lg bg-gray-50 dark:bg-dark-800 space-y-4">
+				{open && (
+					<div className="mt-2 p-4 border border-gray-200 dark:border-black-700 rounded-lg bg-gray-50 dark:bg-black-800 space-y-4">
 					<div className="grid md:grid-cols-4 gap-3">
 						<input className="input" placeholder="First Name" value={form.firstName} onChange={e=>setForm({...form, firstName:e.target.value})} />
 						<input className="input" placeholder="Last Name" value={form.lastName} onChange={e=>setForm({...form, lastName:e.target.value})} />

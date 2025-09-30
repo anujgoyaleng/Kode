@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '@/api/client'
+import { normalizeDepartment, normalizeSection, normalizeBatch, normalizeSemester } from '@/utils/normalize'
 
 export default function AdminStudentsPage() {
     const [loading, setLoading] = useState(true)
@@ -40,12 +41,18 @@ export default function AdminStudentsPage() {
             if (studentId) {
                 await api.put(`/faculty/students/${studentId}/profile`, {
                     rollNumber: edit.rollNumber || null,
-                    batch: edit.batch || null,
-                    semester: edit.semester ? parseInt(edit.semester) : null,
-                    section: edit.section || null
+                    batch: normalizeBatch(edit.batch) || null,
+                    semester: normalizeSemester(edit.semester),
+                    section: normalizeSection(edit.section) || null
                 })
             } else {
-                await api.post('/faculty/students', { userId: u.id, rollNumber: edit.rollNumber, batch: edit.batch, semester: edit.semester ? parseInt(edit.semester) : null })
+                await api.post('/faculty/students', { 
+                    userId: u.id, 
+                    rollNumber: edit.rollNumber || null, 
+                    batch: normalizeBatch(edit.batch) || null, 
+                    semester: normalizeSemester(edit.semester),
+                    section: normalizeSection(edit.section) || null
+                })
             }
             await api.put(`/users/${u.id}/status`, { isActive: true })
             setEdit({ rollNumber: '', batch: '', semester: '', section: '' })
@@ -57,10 +64,20 @@ export default function AdminStudentsPage() {
 
     const setMentor = async (section, facultyUserId) => {
         try {
-            await api.put(`/mentors/${encodeURIComponent(section)}`, { facultyUserId })
-            setMentors(prev => ({ ...prev, [section]: facultyUserId }))
+            const sec = normalizeSection(section)
+            await api.put(`/mentors/${encodeURIComponent(sec)}`, { facultyUserId })
+            setMentors(prev => ({ ...prev, [sec]: facultyUserId }))
         } catch (e) {
             alert(e.response?.data?.message || 'Failed to assign mentor')
+        }
+    }
+
+    const rejectUser = async (u) => {
+        try {
+            await api.delete(`/users/${u.id}`)
+            load()
+        } catch (e) {
+            alert(e.response?.data?.message || 'Rejection failed')
         }
     }
 
@@ -84,7 +101,7 @@ export default function AdminStudentsPage() {
     const sections = Array.from(new Set(students.map(s => s.section).filter(Boolean)))
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-900 w-full px-4 md:px-8">
+        <div className="min-h-screen bg-gray-50 dark:bg-pureblack w-full px-4 md:px-8">
             <div className="py-6 max-w-7xl mx-auto space-y-8">
                 <div className="flex items-center justify-between">
                     <div>
@@ -104,12 +121,15 @@ export default function AdminStudentsPage() {
                     </div>
                     <div className="grid md:grid-cols-2 gap-4">
                         {pending.map(u => (
-                            <div key={u.id} className="border border-gray-200 dark:border-dark-700 rounded-lg p-4 bg-gray-50 dark:bg-dark-800 flex items-center justify-between">
+                            <div key={u.id} className="border border-gray-200 dark:border-black-700 rounded-lg p-4 bg-gray-50 dark:bg-black-800 flex items-center justify-between">
                                 <div>
                                     <div className="font-medium text-gray-900 dark:text-gray-100">{u.firstName} {u.lastName}</div>
                                     <div className="text-sm text-gray-600 dark:text-gray-400">{u.email}</div>
                                 </div>
-                                <button onClick={()=>approve(u)} className="btn-primary text-sm bg-green-600 hover:bg-green-700">Approve</button>
+                                <div className="flex gap-2">
+                                    <button onClick={()=>approve(u)} className="btn-primary text-sm bg-green-600 hover:bg-green-700">Approve</button>
+                                    <button onClick={()=>rejectUser(u)} className="btn-danger text-sm">Reject</button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -120,7 +140,7 @@ export default function AdminStudentsPage() {
                     <div className="grid md:grid-cols-3 gap-4">
                         {sections.length === 0 && <div className="text-sm text-gray-600 dark:text-gray-400 col-span-full text-center py-8">No sections yet</div>}
                         {sections.map(sec => (
-                            <div key={sec} className="border border-gray-200 dark:border-dark-700 rounded-lg p-4 bg-gray-50 dark:bg-dark-800 flex items-center justify-between">
+                            <div key={sec} className="border border-gray-200 dark:border-black-700 rounded-lg p-4 bg-gray-50 dark:bg-black-800 flex items-center justify-between">
                                 <div className="font-medium text-gray-900 dark:text-gray-100">{sec}</div>
                                 <select className="input w-auto" value={mentors[sec] || ''} onChange={e=>setMentor(sec, parseInt(e.target.value))}>
                                     <option value="">Select mentor</option>
@@ -134,7 +154,7 @@ export default function AdminStudentsPage() {
                 </div>
 
                 <div className="card overflow-hidden">
-                    <div className="p-6 border-b border-gray-200 dark:border-dark-700">
+                    <div className="p-6 border-b border-gray-200 dark:border-black-700">
                         <h2 className="font-semibold text-xl text-gray-900 dark:text-gray-100">All Students</h2>
                     </div>
                     <div className="overflow-x-auto">
@@ -149,7 +169,7 @@ export default function AdminStudentsPage() {
                                     <th>Section</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="text-gray-900 dark:text-white">
                                 {students.map(s => (
                                     <tr key={s.id}>
                                         <td className="font-medium whitespace-nowrap">{s.firstName} {s.lastName}</td>

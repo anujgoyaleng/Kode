@@ -14,6 +14,7 @@ import AdminUsersPage from '@/pages/AdminUsersPage'
 import AdminStudentsPage from '@/pages/AdminStudentsPage'
 import AdminAssignmentsPage from '@/pages/AdminAssignmentsPage'
 import AttendanceDashboard from '@/pages/AttendanceDashboard'
+import AchievementsPage from '@/pages/AchievementsPage'
 // Optional pages were referenced but not implemented; removed for now
 import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { ThemeProvider } from '@/contexts/ThemeContext'
@@ -48,7 +49,8 @@ export default function App() {
 					<Route path="/faculty/attendance" element={<ProtectedRoute roles={["faculty", "admin"]}><div className="pt-14"><FacultyAttendancePage /></div></ProtectedRoute>} />
 					<Route path="/faculty/my-students" element={<ProtectedRoute roles={["faculty", "admin"]}><div className="pt-14"><FacultyMyStudents /></div></ProtectedRoute>} />
 					<Route path="/analytics" element={<ProtectedRoute roles={["student", "faculty", "admin"]}><div className="pt-14"><AnalyticsPage /></div></ProtectedRoute>} />
-					<Route path="/attendance-dashboard" element={<ProtectedRoute roles={["student", "admin", "faculty"]}><div className="pt-14"><AttendanceDashboard /></div></ProtectedRoute>} />
+                    <Route path="/attendance-dashboard" element={<ProtectedRoute roles={["student", "admin", "faculty"]}><div className="pt-14"><AttendanceDashboard /></div></ProtectedRoute>} />
+                    <Route path="/achievements" element={<ProtectedRoute roles={["student"]}><div className="pt-14"><AchievementsPage /></div></ProtectedRoute>} />
 					<Route path="/verifications" element={<ProtectedRoute roles={["faculty"]}><div className="pt-14"><VerificationsPage /></div></ProtectedRoute>} />
 					<Route path="/admin" element={<ProtectedRoute roles={["admin"]}><div className="pt-14"><AdminDashboard /></div></ProtectedRoute>} />
 					<Route path="/admin/users" element={<ProtectedRoute roles={["admin"]}><div className="pt-14"><AdminUsersPage /></div></ProtectedRoute>} />

@@ -66,7 +66,7 @@ export default function RegisterPage() {
 					</div>
 					{/* Registration is student-only on UI to prevent privilege self-assignment */}
 					<button className="btn-primary w-full py-3 bg-green-600 hover:bg-green-700" disabled={loading}>
-						{loading ? 'Registering...' : 'Register (await admin approval)'}
+						{loading ? 'Registering...' : 'Register Now'}
 					</button>
 					<div className="text-sm text-center text-gray-600 dark:text-black-400">
 						Already have an account? <Link to="/login" className="text-primary-600 dark:text-accent-400 hover:text-primary-700 dark:hover:text-accent-300 font-medium transition-colors">Login</Link>

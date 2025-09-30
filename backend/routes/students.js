@@ -114,6 +114,39 @@ router.get('/', authenticate, authorize('faculty', 'admin'), validatePagination,
     });
   }
 });
+/**
+ * @route   PUT /api/students/feature/:type/:id
+ * @desc    Toggle feature flag for items to show on dashboard
+ * @access  Private (Student, Faculty/Admin can also set if needed)
+ */
+router.put('/feature/:type/:id', authenticate, async (req, res) => {
+  try {
+    const { type, id } = req.params;
+    const { isFeatured } = req.body;
+    if (typeof isFeatured !== 'boolean') {
+      return res.status(400).json({ status: 'error', message: 'isFeatured must be boolean' })
+    }
+    let table;
+    switch (type) {
+      case 'achievement': table = 'academic_achievements'; break;
+      case 'activity': table = 'extracurricular_activities'; break;
+      case 'project': table = 'projects'; break;
+      case 'certificate': table = 'certificates'; break;
+      default:
+        return res.status(400).json({ status: 'error', message: 'Invalid type' })
+    }
+
+    // Ensure column exists to avoid runtime errors on fresh databases
+    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false`)
+
+    const update = await pool.query(`UPDATE ${table} SET is_featured = $1 WHERE id = $2 RETURNING id, is_featured`, [isFeatured, id])
+    if (update.rows.length === 0) return res.status(404).json({ status: 'error', message: 'Item not found' })
+    res.status(200).json({ status: 'success', data: { id: update.rows[0].id, isFeatured: update.rows[0].is_featured } })
+  } catch (error) {
+    console.error('Toggle feature flag error:', error);
+    res.status(500).json({ status: 'error', message: 'Internal server error' });
+  }
+});
 
 /**
  * @route   GET /api/students/attendance
@@ -359,6 +392,14 @@ router.get('/:id', authenticate, authorizeStudentAccess, validateId, async (req,
     `;
     const projectsResult = await pool.query(projectsQuery, [studentId]);
 
+  // Get certificates
+  const certificatesQuery = `
+    SELECT * FROM certificates
+    WHERE student_id = $1
+    ORDER BY created_at DESC
+  `;
+  const certificatesResult = await pool.query(certificatesQuery, [studentId]);
+
     // Get skills
     const skillsQuery = `
       SELECT * FROM skills 
@@ -397,6 +438,7 @@ router.get('/:id', authenticate, authorizeStudentAccess, validateId, async (req,
           semester: achievement.semester,
           year: achievement.year,
           certificateUrl: achievement.certificate_url,
+          isFeatured: achievement.is_featured,
           isVerified: achievement.is_verified,
           verifiedBy: achievement.verified_by,
           verifiedAt: achievement.verified_at,
@@ -412,6 +454,7 @@ router.get('/:id', authenticate, authorizeStudentAccess, validateId, async (req,
           endDate: activity.end_date,
           position: activity.position,
           certificateUrl: activity.certificate_url,
+          isFeatured: activity.is_featured,
           isVerified: activity.is_verified,
           verifiedBy: activity.verified_by,
           verifiedAt: activity.verified_at,
@@ -426,10 +469,25 @@ router.get('/:id', authenticate, authorizeStudentAccess, validateId, async (req,
           liveUrl: project.live_url,
           startDate: project.start_date,
           endDate: project.end_date,
+          isFeatured: project.is_featured,
           isVerified: project.is_verified,
           verifiedBy: project.verified_by,
           verifiedAt: project.verified_at,
           createdAt: project.created_at
+        })),
+        certificates: certificatesResult.rows.map(cert => ({
+          id: cert.id,
+          filename: cert.filename,
+          originalName: cert.original_name,
+          fileSize: cert.file_size,
+          mimeType: cert.mime_type,
+          fileUrl: `/uploads/${cert.filename}`,
+          description: cert.description,
+          isFeatured: cert.is_featured,
+          isVerified: cert.is_verified,
+          verifiedBy: cert.verified_by,
+          verifiedAt: cert.verified_at,
+          createdAt: cert.created_at
         })),
         skills: skillsResult.rows.map(skill => ({
           id: skill.id,

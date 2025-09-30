@@ -13,13 +13,27 @@ const router = express.Router();
 router.get('/dashboard', authenticate, authorize('faculty', 'admin'), async (req, res) => {
   try {
     // Get total students count
-    const studentsCountQuery = `
-      SELECT COUNT(*) as total_students
-      FROM students s
-      JOIN users u ON s.user_id = u.id
-      WHERE u.is_active = true
-    `;
-    const studentsCountResult = await pool.query(studentsCountQuery);
+    // - For faculty: count only students assigned to this faculty_user_id (approved only)
+    // - For admin: count all approved students
+    let studentsCountResult;
+    if (req.user.role === 'faculty') {
+      const facultyStudentsQuery = `
+        SELECT COUNT(DISTINCT s.id) AS total_students
+        FROM faculty_student_assignments fsa
+        JOIN students s ON fsa.student_id = s.id
+        JOIN users u ON s.user_id = u.id
+        WHERE fsa.faculty_user_id = $1 AND u.is_active = true
+      `;
+      studentsCountResult = await pool.query(facultyStudentsQuery, [req.user.id]);
+    } else {
+      const studentsCountQuery = `
+        SELECT COUNT(*) as total_students
+        FROM students s
+        JOIN users u ON s.user_id = u.id
+        WHERE u.is_active = true
+      `;
+      studentsCountResult = await pool.query(studentsCountQuery);
+    }
 
     // Get pending verifications count
     const pendingVerificationsQuery = `
@@ -547,7 +561,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
 
     if (!type || type === 'achievements') {
       const achievementsQuery = `
-        SELECT aa.*, s.roll_number, u.first_name, u.last_name, u.email
+        SELECT aa.*, s.roll_number, s.section, u.first_name, u.last_name, u.email
         FROM academic_achievements aa
         JOIN students s ON aa.student_id = s.id
         JOIN users u ON s.user_id = u.id
@@ -564,6 +578,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
         description: row.description,
         student: {
           rollNumber: row.roll_number,
+          section: row.section,
           firstName: row.first_name,
           lastName: row.last_name,
           email: row.email
@@ -574,7 +589,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
 
     if (!type || type === 'activities') {
       const activitiesQuery = `
-        SELECT ea.*, s.roll_number, u.first_name, u.last_name, u.email
+        SELECT ea.*, s.roll_number, s.section, u.first_name, u.last_name, u.email
         FROM extracurricular_activities ea
         JOIN students s ON ea.student_id = s.id
         JOIN users u ON s.user_id = u.id
@@ -593,6 +608,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
         organization: row.organization,
         student: {
           rollNumber: row.roll_number,
+          section: row.section,
           firstName: row.first_name,
           lastName: row.last_name,
           email: row.email
@@ -603,7 +619,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
 
     if (!type || type === 'projects') {
       const projectsQuery = `
-        SELECT p.*, s.roll_number, u.first_name, u.last_name, u.email
+        SELECT p.*, s.roll_number, s.section, u.first_name, u.last_name, u.email
         FROM projects p
         JOIN students s ON p.student_id = s.id
         JOIN users u ON s.user_id = u.id
@@ -623,6 +639,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
         liveUrl: row.live_url,
         student: {
           rollNumber: row.roll_number,
+          section: row.section,
           firstName: row.first_name,
           lastName: row.last_name,
           email: row.email
@@ -633,7 +650,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
 
     if (!type || type === 'certificates') {
       const certificatesQuery = `
-        SELECT c.*, s.roll_number, u.first_name, u.last_name, u.email
+        SELECT c.*, s.roll_number, s.section, u.first_name, u.last_name, u.email
         FROM certificates c
         JOIN students s ON c.student_id = s.id
         JOIN users u ON s.user_id = u.id
@@ -654,6 +671,7 @@ router.get('/verifications', authenticate, authorize('faculty', 'admin'), valida
         fileUrl: `/uploads/${row.filename}`,
         student: {
           rollNumber: row.roll_number,
+          section: row.section,
           firstName: row.first_name,
           lastName: row.last_name,
           email: row.email

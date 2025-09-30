@@ -46,7 +46,7 @@ export default function VerificationsPage() {
 			<div className="py-6 max-w-7xl mx-auto space-y-8">
 				<div className="flex items-center justify-between">
 					<div>
-						<h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pending Approvals</h1>
+						<h1 className="text-3xl font-bold text-gray-900 dark:text-white">Pending Verifications</h1>
 						<p className="text-gray-600 dark:text-black-400 mt-1">Review and approve student submissions</p>
 					</div>
 				</div>
@@ -58,7 +58,23 @@ export default function VerificationsPage() {
 									{item.type}
 								</span>
 							</div>
-							<div className="font-semibold text-lg text-gray-900 dark:text-white mb-2">{item.title || item.filename}</div>
+                            <div className="font-semibold text-lg text-gray-900 dark:text-white mb-1">{item.title || item.filename}</div>
+                            {item.type === 'certificate' && item.fileUrl && (
+                                <div className="mb-3">
+                                    <img 
+                                        src={item.fileUrl} 
+                                        alt={item.originalName || 'Certificate'} 
+                                        className="w-full max-h-64 object-contain rounded border border-gray-200 dark:border-black-700 bg-white dark:bg-black-900"
+                                        loading="lazy"
+                                    />
+                                </div>
+                            )}
+                            {item.student && (
+                                <div className="text-xs text-gray-600 dark:text-black-400 mb-3">
+                                    <span className="font-medium text-gray-700 dark:text-gray-300">Student:</span>
+                                    {' '}{item.student.firstName} {item.student.lastName} • Roll: {item.student.rollNumber}{item.student.section ? ` • Section: ${item.student.section}` : ''}
+                                </div>
+                            )}
 							{item.description && (
 								<div className="text-sm text-gray-600 dark:text-black-400 mb-4">{item.description}</div>
 							)}

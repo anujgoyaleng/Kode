@@ -167,7 +167,7 @@ export default function FacultyAttendancePage() {
                         <div className="card p-6">
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-gray-700 dark:text-black-300">Date:</label>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Date:</label>
                                     <input type="date" className="input w-auto" value={date} onChange={e=>setDate(e.target.value)} />
                                 </div>
                                 {selectedBatch && selectedSection && (
@@ -280,7 +280,7 @@ export default function FacultyAttendancePage() {
                             {/* Name and Roll Number Filters */}
                             <div className="flex items-center gap-4">
                                 <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-gray-700 dark:text-black-300">Name:</label>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Name:</label>
                                     <input 
                                         className="input w-48" 
                                         placeholder="Filter by name" 
@@ -289,7 +289,7 @@ export default function FacultyAttendancePage() {
                                     />
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <label className="text-sm font-medium text-gray-700 dark:text-black-300">Roll No:</label>
+                                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Roll No:</label>
                                     <input 
                                         className="input w-32" 
                                         placeholder="Filter by roll" 
@@ -330,7 +330,7 @@ export default function FacultyAttendancePage() {
                             
                             {/* Bulk Actions */}
                             <div className="flex items-center gap-3">
-                                <span className="text-sm font-medium text-gray-700 dark:text-black-300">Bulk Actions:</span>
+                                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Bulk Actions:</span>
                                 <button 
                                     onClick={markAllPresent}
                                     disabled={!isAttendanceEditable()}
@@ -356,7 +356,7 @@ export default function FacultyAttendancePage() {
                                     disabled={!isAttendanceEditable()}
                                     className={`btn-secondary text-sm px-3 py-1 ${!isAttendanceEditable() 
                                         ? 'bg-gray-100 dark:bg-black-800 text-gray-400 dark:text-black-600 cursor-not-allowed' 
-                                        : 'bg-gray-50 hover:bg-gray-100 dark:bg-black-800 dark:hover:bg-black-700 text-gray-700 dark:text-black-300'
+                                        : 'bg-gray-50 hover:bg-gray-100 dark:bg-black-800 dark:hover:bg-black-700 text-gray-700 dark:text-gray-300'
                                     }`}
                                 >
                                     Clear All
@@ -375,11 +375,11 @@ export default function FacultyAttendancePage() {
                                             <th>Status</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
+                                    <tbody className="text-gray-900 dark:text-white">
                                         {filteredStudents.map(r => (
                                             <tr key={r.studentId}>
-                                                <td className="font-medium">{r.rollNumber}</td>
-                                                <td className="font-medium">{r.firstName} {r.lastName}</td>
+                                                <td className="font-medium text-gray-900 dark:text-gray-100">{r.rollNumber}</td>
+                                                <td className="font-medium text-gray-900 dark:text-gray-100">{r.firstName} {r.lastName}</td>
                                                 <td>
                                                     <div className="flex items-center gap-4">
                                                         <label className={`inline-flex items-center gap-2 text-sm px-2 py-1 rounded transition-colors ${

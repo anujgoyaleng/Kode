@@ -2,8 +2,12 @@ import { Link } from 'react-router-dom'
 import { useEffect, useRef, useState, useMemo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import ThemeToggle from './ThemeToggle'
+import logoImg from '@/assets/logo.jpg'
+import logoDark from '@/assets/logoDark.png'
+import { useTheme } from '@/contexts/ThemeContext'
 
 export default function Navbar() {
+const { isDark } = useTheme()
 const { user, logout } = useAuth()
 const [notifOpen, setNotifOpen] = useState(false)
 const [menuOpen, setMenuOpen] = useState(false)
@@ -78,9 +82,12 @@ const mmss = useMemo(() => {
 		<nav className="fixed top-0 left-0 right-0 z-50 w-full border-b border-gray-200/50 dark:border-black-700/50 bg-white/80 dark:bg-black-900/80 backdrop-blur-md shadow-sm dark:shadow-2xl">
 			<div className="w-full flex items-center justify-between pl-2 md:pl-4 pr-2 h-14">
 				<div className="flex items-center gap-3 py-3 mr-auto">
-					<Link to="/" className="font-semibold text-gray-900 dark:text-white hover:text-primary-600 dark:hover:text-accent-400 transition-colors">Pragati</Link>
+					<Link to="/" className="hover:opacity-90 transition-opacity">
+						<img src={isDark ? logoDark : logoImg} alt="Pragati" className="h-[1.8rem] w-auto md:h-[2.1rem]" />
+					</Link>
 					{user?.role === 'student' && <Link to="/student" className="text-sm text-gray-600 dark:text-black-400 hover:text-primary-600 dark:hover:text-accent-400 transition-colors">Dashboard</Link>}
 					{user?.role === 'student' && <Link to="/attendance-dashboard" className="text-sm text-gray-600 dark:text-black-400 hover:text-primary-600 dark:hover:text-accent-400 transition-colors">My Attendance</Link>}
+					{user?.role === 'student' && <Link to="/achievements" className="text-sm text-gray-600 dark:text-black-400 hover:text-primary-600 dark:hover:text-accent-400 transition-colors">Achievements</Link>}
 					{(user?.role === 'faculty' || user?.role === 'admin') && <>
 						{user?.role === 'faculty' && <Link to="/faculty" className="text-sm hidden md:inline-block text-gray-600 dark:text-black-400 hover:text-primary-600 dark:hover:text-accent-400 transition-colors">Dashboard</Link>}
 						{user?.role === 'admin' && <Link to="/admin" className="text-sm hidden md:inline-block text-gray-600 dark:text-black-400 hover:text-primary-600 dark:hover:text-accent-400 transition-colors">Dashboard</Link>}
@@ -104,7 +111,7 @@ const mmss = useMemo(() => {
                         <div className="relative">
                             <button ref={notifRef} onClick={(e) => { e.stopPropagation(); setNotifOpen(o => !o); setMenuOpen(false) }} className="text-lg text-gray-600 dark:text-gray-400 hover:text-primary-600 dark:hover:text-primary-400 transition-colors p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700" title="Notifications">🔔</button>
                             {notifOpen && (
-                                <div className="navbar-dropdown absolute right-0 top-10 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-2xl p-3 text-sm z-50 dark:backdrop-blur-md">
+                                <div className="navbar-dropdown absolute right-0 top-full mt-2 w-64 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-2xl p-3 text-sm z-50 dark:backdrop-blur-md">
                                     <div className="font-semibold mb-1 text-gray-900 dark:text-white">Notifications</div>
                                     <div className="text-gray-600 dark:text-gray-300">No notifications for you. Have a great day! ✨</div>
                                 </div>
@@ -126,11 +133,9 @@ const mmss = useMemo(() => {
 									{menuOpen && (
 										<div className="navbar-dropdown absolute right-0 top-10 w-56 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg dark:shadow-2xl py-1 z-50 dark:backdrop-blur-md">
 											<Link to={user?.role === 'student' ? '/student' : (user?.role === 'admin' ? '/admin' : '/faculty')} className="navbar-dropdown-item block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors">Dashboard</Link>
-											{
-												user.role !== 'admin' && (<Link to="/analytics" className="navbar-dropdown-item block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors">Analytics</Link>)
-											}
+											{user?.role === 'student' && <Link to="/achievements" className="navbar-dropdown-item block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors">Achievements</Link>}
+											{user.role !== 'admin' && (<Link to="/analytics" className="navbar-dropdown-item block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors">Analytics</Link>)}
 											<Link to="/profile" className="navbar-dropdown-item block px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-700 dark:text-gray-200 transition-colors">Profile</Link>
-											
 											<button onClick={logout} className="navbar-dropdown-item block w-full text-left px-3 py-2 text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">Logout</button>
 										</div>
 									)}

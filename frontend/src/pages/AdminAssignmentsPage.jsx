@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '@/api/client'
+import { normalizeBatch, normalizeSemester, normalizeSection } from '@/utils/normalize'
 
 export default function AdminAssignmentsPage() {
     const [loading, setLoading] = useState(true)
@@ -75,16 +76,17 @@ export default function AdminAssignmentsPage() {
             if (studentId) {
                 await api.put(`/faculty/students/${studentId}/profile`, {
                     rollNumber: defaults.rollNumber || null,
-                    batch: defaults.batch || null,
-                    semester: defaults.semester ? parseInt(defaults.semester) : null,
-                    section: defaults.section || null
+                    batch: normalizeBatch(defaults.batch) || null,
+                    semester: normalizeSemester(defaults.semester),
+                    section: normalizeSection(defaults.section) || null
                 })
             } else {
                 await api.post('/faculty/students', {
                     userId: u.id,
-                    rollNumber: defaults.rollNumber,
-                    batch: defaults.batch,
-                    semester: defaults.semester ? parseInt(defaults.semester) : null
+                    rollNumber: defaults.rollNumber || null,
+                    batch: normalizeBatch(defaults.batch) || null,
+                    semester: normalizeSemester(defaults.semester),
+                    section: normalizeSection(defaults.section) || null
                 })
             }
             await api.put(`/users/${u.id}/status`, { isActive: true })
@@ -184,7 +186,10 @@ export default function AdminAssignmentsPage() {
                                     <div className="font-medium text-gray-900 dark:text-white">{u.firstName} {u.lastName}</div>
                                     <div className="text-sm text-gray-600 dark:text-black-400">{u.email}</div>
                                 </div>
-                                <button onClick={()=>approve(u)} className="btn-primary text-sm bg-green-600 hover:bg-green-700">Approve</button>
+                                <div className="flex gap-2">
+                                    <button onClick={()=>approve(u)} className="btn-primary text-sm bg-green-600 hover:bg-green-700">Approve</button>
+                                    <button onClick={async()=>{ try { await api.delete(`/users/${u.id}`); setPending(prev=>prev.filter(x=>x.id!==u.id)) } catch(e){ alert(e.response?.data?.message||'Rejection failed') } }} className="btn-danger text-sm">Reject</button>
+                                </div>
                             </div>
                         ))}
                     </div>
@@ -307,7 +312,7 @@ export default function AdminAssignmentsPage() {
                                     <th>Actions</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="text-gray-900 dark:text-white">
                                 {filteredStudents.map(s => (
                                     <tr key={s.id} className="align-top">
                                         <td className="whitespace-nowrap">

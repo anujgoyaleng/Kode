@@ -14,6 +14,57 @@ function AttendanceDotGrid({
   const [hoveredDate, setHoveredDate] = useState(null);
   const [clickedDate, setClickedDate] = useState(null);
 
+  // Build a yyyy-mm-dd key in local time (no UTC shift)
+  const toLocalDateKey = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  // Build a date -> status map for the last `dateRange` days from API data
+  const dateStatusMap = useMemo(() => {
+    const map = {};
+    const today = new Date();
+    for (let i = 0; i < dateRange; i++) {
+      const d = new Date(today);
+      d.setDate(d.getDate() - i);
+      const key = toLocalDateKey(d);
+      map[key] = null; // default: no record
+    }
+    // If a faculty is selected and we have their per-day attendance, use that
+    if (
+      selectedFaculty &&
+      facultyAttendanceData &&
+      facultyAttendanceData[selectedFaculty] &&
+      facultyAttendanceData[selectedFaculty].attendance
+    ) {
+      const records = facultyAttendanceData[selectedFaculty].attendance; // object keyed by YYYY-MM-DD
+      Object.entries(records).forEach(([dateKey, rec]) => {
+        const parsed = new Date(dateKey);
+        const localKey = isNaN(parsed.getTime())
+          ? String(dateKey).slice(0, 10)
+          : toLocalDateKey(parsed);
+        if (Object.prototype.hasOwnProperty.call(map, localKey)) {
+          map[localKey] = rec?.status || null;
+        }
+      });
+    }
+    return map;
+  }, [attendanceData, dateRange, selectedFaculty, facultyAttendanceData]);
+
+  // Only connect the grid to API data if data exists
+  const hasApiData = useMemo(() => {
+    if (!selectedFaculty) return false;
+    const faculty =
+      facultyAttendanceData && facultyAttendanceData[selectedFaculty];
+    const hasFacultyRecords =
+      faculty &&
+      faculty.attendance &&
+      Object.keys(faculty.attendance).length > 0;
+    return !!hasFacultyRecords;
+  }, [selectedFaculty, facultyAttendanceData]);
+
   // Date range options
   const dateRangeOptions = [
     { value: 7, label: "Last 7 days" },
@@ -62,22 +113,11 @@ function AttendanceDotGrid({
 
   // Get attendance status for a specific date
   const getAttendanceStatus = (date) => {
-    if (!date) {
-      return null; // No date provided
-    }
-
-    // Look for student attendance record for this date
-    const attendanceRecord = attendanceData.find(record => record.date === date);
-    
-    if (!attendanceRecord) {
-      // For testing: return some test statuses
-      const day = new Date(date).getDate();
-      if (day % 3 === 0) return 'present';
-      if (day % 3 === 1) return 'absent';
-      return null; // No attendance record found
-    }
-
-    return attendanceRecord.status || null;
+    if (!date) return null;
+    if (!hasApiData) return null;
+    return Object.prototype.hasOwnProperty.call(dateStatusMap, date)
+      ? dateStatusMap[date]
+      : null;
   };
 
   // Handle dot click
@@ -139,10 +179,13 @@ function AttendanceDotGrid({
     let currentMonth = null;
     let currentMonthData = null;
 
+    // Compute allowed date keys in the selected range
+    const allowedDateKeys = new Set(Object.keys(dateStatusMap));
+
     for (let i = dateRange - 1; i >= 0; i--) {
       const date = new Date(today);
       date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split("T")[0];
+      const dateStr = toLocalDateKey(date);
       const month = date.getMonth();
       const year = date.getFullYear();
 
@@ -189,10 +232,14 @@ function AttendanceDotGrid({
         calendarDays.push({ type: "empty" });
       }
 
-      // Add all days of the month
+      // Add all days of the month, but only keep those within the allowed range
       for (let day = 1; day <= daysInMonth; day++) {
-        const dateStr = new Date(year, month, day).toISOString().split("T")[0];
-        calendarDays.push({ type: "date", date: dateStr });
+        const localStr = toLocalDateKey(new Date(year, month, day));
+        if (allowedDateKeys.has(localStr)) {
+          calendarDays.push({ type: "date", date: localStr });
+        } else {
+          calendarDays.push({ type: "empty" });
+        }
       }
 
       // Add empty cells to fill the remaining week (optional, for complete grid)
@@ -254,174 +301,242 @@ function AttendanceDotGrid({
             </div>
           </div>
         </div>
-
-        {/* Legend */}
-        <div className="flex items-center space-x-4 text-sm">
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-blue-600 dark:bg-blue-500 rounded-sm"></div>
-            <span className="text-gray-600 dark:text-gray-400">Present</span>
-          </div>
-          <div className="flex items-center space-x-2">
-            <div className="w-3 h-3 bg-gray-300 dark:bg-gray-600 rounded-sm"></div>
-            <span className="text-gray-600 dark:text-gray-400">No Record</span>
-          </div>
-        </div>
       </div>
 
+      {/* Calendar Layout */}
+      <div className="w-full max-w-7xl mx-auto">
+        <div className="bg-gray-50 dark:bg-black-900 rounded-xl p-6">
+          {/* Compact range layout for small ranges (≤14 days) */}
+          {dateRange <= 14 ? (
+            <div>
+              <div className="text-center mb-4">
+                <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Last {dateRange} days
+                </h4>
+              </div>
+              <div className="grid grid-cols-7 sm:grid-cols-14 gap-2 place-items-center">
+                {[...Array(dateRange)].map((_, idx) => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - (dateRange - 1 - idx));
+                  const dateStr = toLocalDateKey(d);
+                  const status = getAttendanceStatus(dateStr);
+                  const isToday =
+                    dateStr === new Date().toISOString().split("T")[0];
+                  const isHovered = hoveredDate === dateStr;
+                  const isClicked = clickedDate === dateStr;
+                  return (
+                    <div
+                      key={dateStr}
+                      className="relative aspect-square flex items-center justify-center"
+                      onMouseEnter={() => setHoveredDate(dateStr)}
+                      onMouseLeave={() => setHoveredDate(null)}
+                    >
+                      <div
+                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center ${
+                          status === "present"
+                            ? "bg-green-500 hover:bg-green-600 dark:bg-green-400 dark:hover:bg-green-300 shadow-sm"
+                            : status === "absent"
+                            ? "bg-red-500 hover:bg-red-600 dark:bg-red-400 dark:hover:bg-red-300 shadow-sm"
+                            : "bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500"
+                        } ${isHovered ? "scale-110 shadow-lg" : ""} ${
+                          isToday
+                            ? "ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-2 ring-offset-gray-50 dark:ring-offset-black-900"
+                            : ""
+                        }`}
+                        onClick={() => handleDotClick(dateStr)}
+                        title={`${formatDisplayDate(dateStr)}${
+                          status ? ` - ${status}` : ""
+                        }`}
+                      />
 
-       {/* Calendar Month Layout */}
-       <div className="w-full max-w-7xl mx-auto">
-         <div className="bg-gray-50 dark:bg-black-900 rounded-xl p-6">
-      
-
-          {/* Month Calendars */}
-          <div className="flex flex-wrap justify-center  gap-6 sm:gap-8 md:gap-10 lg:gap-12">
-            {flowingDates.map((monthData, monthIndex) => {
-              const monthNames = [
-                "January",
-                "February",
-                "March",
-                "April",
-                "May",
-                "June",
-                "July",
-                "August",
-                "September",
-                "October",
-                "November",
-                "December",
-              ];
-
-              return (
-                 <div
-                   key={`month-${monthData.month}-${monthData.year}`}
-                   className="flex-shrink-0 min-w-[280px] sm:min-w-[320px] bg-gray-50 dark:bg-black-900 rounded-lg p-4"
-                 >
-                  {/* Month Header */}
-                  <div className="text-center mb-4">
-                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {monthNames[monthData.month]} {monthData.year}
-                    </h4>
-                  </div>
-
-                  {/* Day Headers */}
-                  <div className="grid grid-cols-7 gap-2 mb-2">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
-                      (day, index) => (
-                        <div key={day} className="text-center">
-                          <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
-                            {day}
-                          </span>
-                        </div>
-                      )
-                    )}
-                  </div>
-
-                  {/* Month Grid */}
-                  <div className="grid grid-cols-7 gap-2">
-                    {monthData.calendarDays.map((dayItem, dayIndex) => {
-                      const date =
-                        dayItem.type === "date" ? dayItem.date : null;
-                      const status = date ? getAttendanceStatus(date) : null;
-                      const isHovered = hoveredDate === date;
-                      const isClicked = clickedDate === date;
-                      const isToday =
-                        date === new Date().toISOString().split("T")[0];
-                      const hasData = selectedFaculty;
-                      
-                      // Debug logging for faculty data
-                      if (date && selectedFaculty) {
-                        console.log('Faculty data being considered for dot matrix:', {
-                          selectedFaculty,
-                          facultyData: facultyAttendanceData[selectedFaculty],
-                          date,
-                          status
-                        });
-                      }
-
-                      return (
-                        <div
-                          key={
-                            dayItem.type === "empty"
-                              ? `empty-${dayIndex}`
-                              : date
-                          }
-                          className="relative aspect-square flex items-center justify-center"
-                          onMouseEnter={() => date && setHoveredDate(date)}
-                          onMouseLeave={() => date && setHoveredDate(null)}
-                        >
-                          {dayItem.type === "date" ? (
-                            <>
-                              <div
-                                className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center ${
-                                  hasData
-                                    ? status === "present"
-                                      ? "bg-green-500 hover:bg-green-600 dark:bg-green-400 dark:hover:bg-green-300 shadow-sm"
-                                      : status === "absent"
-                                      ? "bg-red-500 hover:bg-red-600 dark:bg-red-400 dark:hover:bg-red-300 shadow-sm"
-                                      : "bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500"
-                                     : "bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500"
-                                } ${isHovered ? "scale-110 shadow-lg" : ""} ${
-                                  isToday
-                                    ? "ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-2 ring-offset-gray-50 dark:ring-offset-black-900"
-                                    : ""
-                                }`}
-                                onClick={() => selectedFaculty && handleDotClick(date)}
-                                title={`${formatDisplayDate(date)}${
-                                  status ? ` - ${status}` : ""
-                                }`}
-                              />
-
-                              {/* Enhanced Tooltip */}
-                              {(isHovered || isClicked) && (
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-4 py-3 bg-gray-900 dark:bg-gray-800 text-white dark:text-white text-sm rounded-lg shadow-xl whitespace-nowrap z-30 border border-gray-700 dark:border-gray-600">
-                                  <div className="font-medium text-white">
-                                    {formatDisplayDate(date)}
-                                  </div>
-                                  {status && (
-                                    <div
-                                      className={`text-xs mt-1 font-medium ${
-                                        status === "present"
-                                          ? "text-green-300"
-                                          : status === "absent"
-                                          ? "text-red-300"
-                                          : "text-gray-300"
-                                      }`}
-                                    >
-                                      {status === "present"
-                                        ? "✓ Present"
-                                        : status === "absent"
-                                        ? "✗ Absent"
-                                        : "○ No Record"}
-                                    </div>
-                                  )}
-                                  {isToday && (
-                                    <div className="text-xs mt-1 text-blue-300 font-medium">
-                                      📅 Today
-                                    </div>
-                                  )}
-                                  {selectedFaculty && (
-                                    <div className="text-xs mt-1 text-gray-400">
-                                      {
-                                        facultyAttendanceData[selectedFaculty]
-                                          ?.faculty_name
-                                      }
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="w-6 h-6 sm:w-7 sm:h-7"></div>
+                      {(isHovered || isClicked) && (
+                        <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-3 py-2 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-md shadow-xl whitespace-nowrap z-30 border border-gray-700 dark:border-gray-600">
+                          <div className="font-medium text-white">
+                            {formatDisplayDate(dateStr)}
+                          </div>
+                          {status && (
+                            <div
+                              className={`mt-1 ${
+                                status === "present"
+                                  ? "text-green-300"
+                                  : status === "absent"
+                                  ? "text-red-300"
+                                  : "text-gray-300"
+                              }`}
+                            >
+                              {status === "present"
+                                ? "✓ Present"
+                                : status === "absent"
+                                ? "✗ Absent"
+                                : "○ No Record"}
+                            </div>
+                          )}
+                          {isToday && (
+                            <div className="mt-1 text-blue-300">📅 Today</div>
                           )}
                         </div>
-                      );
-                    })}
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            /* Month Calendars for larger ranges */
+            <div className="flex flex-wrap justify-center gap-6 sm:gap-8 md:gap-10 lg:gap-12">
+              {flowingDates.map((monthData, monthIndex) => {
+                const monthNames = [
+                  "January",
+                  "February",
+                  "March",
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December",
+                ];
+
+                return (
+                  <div
+                    key={`month-${monthData.month}-${monthData.year}`}
+                    className="flex-shrink-0 min-w-[280px] sm:min-w-[320px] bg-gray-50 dark:bg-black-900 rounded-lg p-4"
+                  >
+                    {/* Month Header */}
+                    <div className="text-center mb-4">
+                      <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                        {monthNames[monthData.month]} {monthData.year}
+                      </h4>
+                    </div>
+
+                    {/* Day Headers */}
+                    <div className="grid grid-cols-7 gap-2 mb-2">
+                      {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(
+                        (day, index) => (
+                          <div key={day} className="text-center">
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                              {day}
+                            </span>
+                          </div>
+                        )
+                      )}
+                    </div>
+
+                    {/* Month Grid */}
+                    <div className="grid grid-cols-7 gap-2">
+                      {monthData.calendarDays.map((dayItem, dayIndex) => {
+                        const date =
+                          dayItem.type === "date" ? dayItem.date : null;
+                        const status = date ? getAttendanceStatus(date) : null;
+                        const isHovered = hoveredDate === date;
+                        const isClicked = clickedDate === date;
+                        const isToday =
+                          date === new Date().toISOString().split("T")[0];
+                        const hasData = status !== null;
+
+                        // Debug logging for faculty data
+                        if (date && selectedFaculty) {
+                          console.log(
+                            "Faculty data being considered for dot matrix:",
+                            {
+                              selectedFaculty,
+                              facultyData:
+                                facultyAttendanceData[selectedFaculty],
+                              date,
+                              status,
+                            }
+                          );
+                        }
+
+                        return (
+                          <div
+                            key={
+                              dayItem.type === "empty"
+                                ? `empty-${dayIndex}`
+                                : date
+                            }
+                            className="relative aspect-square flex items-center justify-center"
+                            onMouseEnter={() => date && setHoveredDate(date)}
+                            onMouseLeave={() => date && setHoveredDate(null)}
+                          >
+                            {dayItem.type === "date" ? (
+                              <>
+                                <div
+                                  className={`w-6 h-6 sm:w-7 sm:h-7 rounded-full cursor-pointer transition-all duration-200 flex items-center justify-center ${
+                                    hasData
+                                      ? status === "present"
+                                        ? "bg-green-500 hover:bg-green-600 dark:bg-green-400 dark:hover:bg-green-300 shadow-sm"
+                                        : status === "absent"
+                                        ? "bg-red-500 hover:bg-red-600 dark:bg-red-400 dark:hover:bg-red-300 shadow-sm"
+                                        : "bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500"
+                                      : "bg-gray-300 hover:bg-gray-400 dark:bg-gray-600 dark:hover:bg-gray-500"
+                                  } ${isHovered ? "scale-110 shadow-lg" : ""} ${
+                                    isToday
+                                      ? "ring-2 ring-blue-500 dark:ring-blue-400 ring-offset-2 ring-offset-gray-50 dark:ring-offset-black-900"
+                                      : ""
+                                  }`}
+                                  onClick={() =>
+                                    selectedFaculty && handleDotClick(date)
+                                  }
+                                  title={`${formatDisplayDate(date)}${
+                                    status ? ` - ${status}` : ""
+                                  }`}
+                                />
+
+                                {/* Enhanced Tooltip */}
+                                {(isHovered || isClicked) && (
+                                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-3 px-4 py-3 bg-gray-900 dark:bg-gray-800 text-white dark:text-white text-sm rounded-lg shadow-xl whitespace-nowrap z-30 border border-gray-700 dark:border-gray-600">
+                                    <div className="font-medium text-white">
+                                      {formatDisplayDate(date)}
+                                    </div>
+                                    {status && (
+                                      <div
+                                        className={`text-xs mt-1 font-medium ${
+                                          status === "present"
+                                            ? "text-green-300"
+                                            : status === "absent"
+                                            ? "text-red-300"
+                                            : "text-gray-300"
+                                        }`}
+                                      >
+                                        {status === "present"
+                                          ? "✓ Present"
+                                          : status === "absent"
+                                          ? "✗ Absent"
+                                          : "○ No Record"}
+                                      </div>
+                                    )}
+                                    {isToday && (
+                                      <div className="text-xs mt-1 text-blue-300 font-medium">
+                                        📅 Today
+                                      </div>
+                                    )}
+                                    {selectedFaculty && (
+                                      <div className="text-xs mt-1 text-gray-400">
+                                        {
+                                          facultyAttendanceData[selectedFaculty]
+                                            ?.faculty_name
+                                        }
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
+                              <div className="w-6 h-6 sm:w-7 sm:h-7"></div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           {/* Footer Info */}
           <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
@@ -585,56 +700,7 @@ export default function AttendanceDashboard() {
 
   // Debug: Show what facultyStats is using (this is working) - moved after facultyStats is defined
 
-  // If no attendance data, create some test data to verify the logic works
-  if (Object.keys(facultyAttendanceData).length === 0) {
-    console.log(
-      "🧪 No faculty data - creating test data to verify dot logic..."
-    );
-
-    // Create test faculty data
-    const testFacultyId = "test-faculty-1";
-    const testFacultyData = {
-      faculty_name: "Test Faculty",
-      attendance: {},
-    };
-
-    // Add test attendance for the last 7 days
-    const today = new Date();
-    for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split("T")[0];
-
-      // Create some test attendance records
-      if (i % 3 === 0) {
-        testFacultyData.attendance[dateStr] = {
-          status: "present",
-          created_at: new Date().toISOString(),
-        };
-      } else if (i % 3 === 1) {
-        testFacultyData.attendance[dateStr] = {
-          status: "absent",
-          created_at: new Date().toISOString(),
-        };
-      }
-      // i % 3 === 2 means no record (gray dot)
-    }
-
-    // Update the facultyAttendanceData
-    facultyAttendanceData[testFacultyId] = testFacultyData;
-
-    console.log("🧪 Test faculty data created:", testFacultyData);
-    console.log(
-      "🧪 Test attendance dates:",
-      Object.keys(testFacultyData.attendance)
-    );
-
-    // Auto-select the test faculty to show colored dots
-    setTimeout(() => {
-      setSelectedFaculty(testFacultyId);
-      console.log("🧪 Auto-selected test faculty:", testFacultyId);
-    }, 100);
-  }
+  // Remove test data injection; rely solely on API-provided attendance
 
   // Generate dots for the specified date range
 
@@ -804,7 +870,7 @@ export default function AttendanceDashboard() {
                 {overallStats.presentDays}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                Present Days
+                Total Present
               </div>
             </div>
             <div className="card p-6 text-center">
@@ -812,7 +878,7 @@ export default function AttendanceDashboard() {
                 {overallStats.absentDays}
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
-                Absent Days
+                Total Absent
               </div>
             </div>
             <div className="card p-6 text-center">
@@ -857,7 +923,7 @@ export default function AttendanceDashboard() {
                   onClick={() => setSelectedFaculty(null)}
                   className="text-sm text-primary-600 dark:text-primary-400 hover:text-primary-700 dark:hover:text-primary-300"
                 >
-                  Show All Faculties
+                  Clear Selection
                 </button>
               )}
             </div>
@@ -949,8 +1015,8 @@ export default function AttendanceDashboard() {
           </div>
         )}
 
-        {/* Attendance Dot Grid */}
-        {Object.keys(facultyStats).length > 0 && (
+        {/* Attendance Dot Grid - only show when a faculty is selected */}
+        {selectedFaculty && (
           <div className="card p-6">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white">

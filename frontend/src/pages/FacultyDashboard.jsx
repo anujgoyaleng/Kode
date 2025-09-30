@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from 'react-router-dom'
 import api from "@/api/client";
 
 export default function FacultyDashboard() {
@@ -22,14 +23,24 @@ export default function FacultyDashboard() {
     })();
   }, []);
 
+  const refreshAfterAction = async () => {
+    try {
+      const [dashRes, verRes] = await Promise.all([
+        api.get("/faculty/dashboard"),
+        api.get("/faculty/verifications?limit=10"),
+      ]);
+      setData(dashRes.data.data.dashboard);
+      setVerifications(verRes.data.data.verifications);
+    } catch {}
+  };
+
   const verify = async (item, isVerified) => {
     try {
-      await api.put(`/faculty/verify/${item.type}/${item.id}`, { isVerified });
-      setVerifications((prev) =>
-        prev.filter((v) => !(v.type === item.type && v.id === item.id))
-      );
+      await api.put(`/faculty/verify/${item.type}/${item.id}`, { isVerified: !!isVerified });
+      await refreshAfterAction();
     } catch (e) {
-      alert("Action failed");
+      const msg = e.response?.data?.message || 'Action failed';
+      alert(msg);
     }
   };
 
@@ -104,7 +115,10 @@ export default function FacultyDashboard() {
         {/* Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="card p-6">
-            <h2 className="font-semibold text-xl text-gray-900 dark:text-white mb-4">Pending Verifications</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="font-semibold text-xl text-gray-900 dark:text-white">Pending Verifications</h2>
+              <Link to="/verifications" className="btn-secondary text-xs">Go to Approvals →</Link>
+            </div>
             <div className="space-y-3">
               {verifications.length > 0 ? (
                 verifications.map((item) => (
@@ -118,6 +132,13 @@ export default function FacultyDashboard() {
                       </span>
                       {item.title || item.filename}
                     </div>
+                    {/* Certificate preview intentionally omitted on dashboard */}
+                    {item.student && (
+                      <div className="text-xs text-gray-600 dark:text-black-400 mb-2">
+                        <span className="font-medium text-gray-700 dark:text-gray-300">Student:</span>
+                        {' '}{item.student.firstName} {item.student.lastName} • Roll: {item.student.rollNumber}{item.student.section ? ` • Section: ${item.student.section}` : ''}
+                      </div>
+                    )}
                     <div className="flex gap-2">
                       <button
                         onClick={() => verify(item, true)}

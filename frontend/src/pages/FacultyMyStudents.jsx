@@ -46,7 +46,7 @@ export default function FacultyMyStudents() {
     })
 
     if (loading) return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-pureblack flex items-center justify-center">
             <div className="text-center">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
                 <p className="text-gray-600 dark:text-gray-400">Loading students...</p>
@@ -54,7 +54,7 @@ export default function FacultyMyStudents() {
         </div>
     )
     if (error) return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-900 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-pureblack flex items-center justify-center">
             <div className="text-center">
                 <div className="text-red-500 text-6xl mb-4">⚠️</div>
                 <p className="text-red-600 dark:text-red-400 text-lg">{error}</p>
@@ -63,7 +63,7 @@ export default function FacultyMyStudents() {
     )
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-dark-900 w-full px-4 md:px-8">
+        <div className="min-h-screen bg-gray-50 dark:bg-pureblack w-full px-4 md:px-8">
             <div className="py-6 max-w-7xl mx-auto space-y-8">
                 <div className="flex items-center justify-between">
                     <div>
@@ -97,7 +97,7 @@ export default function FacultyMyStudents() {
                     </div>
                 </div>
                 <div className="card overflow-hidden">
-                    <div className="p-6 border-b border-gray-200 dark:border-dark-700">
+                    <div className="p-6 border-b border-gray-200 dark:border-black-700">
                         <div className="flex items-center justify-between">
                             <div>
                                 <h2 className="font-semibold text-xl text-gray-900 dark:text-gray-100">Student List</h2>
@@ -134,15 +134,15 @@ export default function FacultyMyStudents() {
                                     <th>Section</th>
                                 </tr>
                             </thead>
-                            <tbody>
+                            <tbody className="text-gray-900 dark:text-white">
                                 {filteredStudents.map(s => (
                                     <tr key={s.id}>
-                                        <td className="font-medium whitespace-nowrap">{s.firstName} {s.lastName}</td>
-                                        <td>{s.email}</td>
-                                        <td>{s.rollNumber}</td>
-                                        <td>{s.batch || '-'}</td>
-                                        <td>{s.semester || '-'}</td>
-                                        <td>{s.section || '-'}</td>
+                                        <td className="font-medium whitespace-nowrap text-gray-900 dark:text-gray-100">{s.firstName} {s.lastName}</td>
+                                        <td className="text-gray-700 dark:text-gray-300">{s.email}</td>
+                                        <td className="text-gray-700 dark:text-gray-300">{s.rollNumber}</td>
+                                        <td className="text-gray-700 dark:text-gray-300">{s.batch || '-'}</td>
+                                        <td className="text-gray-700 dark:text-gray-300">{s.semester || '-'}</td>
+                                        <td className="text-gray-700 dark:text-gray-300">{s.section || '-'}</td>
                                     </tr>
                                 ))}
                             </tbody>
