@@ -9,9 +9,19 @@ const pool = new Pool({
   connectionTimeoutMillis: 2000,
 });
 
-// Test database connection
-const connectDB = async () => {
+// Retry configuration
+const MAX_RETRY_ATTEMPTS = 4;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
+const MAX_RETRY_DELAY = 10000; // 10 seconds
+
+// Sleep function for delays
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Test database connection with retry logic
+const connectDB = async (retryCount = 0) => {
   try {
+    console.log(`🔄 Attempting database connection... (Attempt ${retryCount + 1}/${MAX_RETRY_ATTEMPTS})`);
+    
     const client = await pool.connect();
     console.log('✅ Database connected successfully');
     
@@ -24,10 +34,57 @@ const connectDB = async () => {
     // Initialize database tables
     await initializeTables();
     
+    // Set up connection monitoring
+    setupConnectionMonitoring();
+    
   } catch (error) {
-    console.error('❌ Database connection error:', error.message);
-    process.exit(1);
+    console.error(`❌ Database connection error (Attempt ${retryCount + 1}):`, error.message);
+    
+    if (retryCount < MAX_RETRY_ATTEMPTS - 1) {
+      const delay = Math.min(INITIAL_RETRY_DELAY * Math.pow(2, retryCount), MAX_RETRY_DELAY);
+      console.log(`⏳ Retrying in ${delay}ms...`);
+      await sleep(delay);
+      return connectDB(retryCount + 1);
+    } else {
+      console.error('💥 Max retry attempts reached. Database connection failed.');
+      console.error('🔧 Please check your database configuration and ensure the database server is running.');
+      process.exit(1);
+    }
   }
+};
+
+// Connection monitoring and auto-reconnection
+const setupConnectionMonitoring = () => {
+  // Monitor pool events
+  pool.on('error', async (err) => {
+    console.error('🚨 Database pool error:', err.message);
+    console.log('🔄 Attempting to reconnect...');
+    
+    // Try to reconnect
+    try {
+      await connectDB();
+    } catch (error) {
+      console.error('❌ Auto-reconnection failed:', error.message);
+    }
+  });
+
+  // Periodic health check
+  setInterval(async () => {
+    try {
+      const client = await pool.connect();
+      await client.query('SELECT 1');
+      client.release();
+    } catch (error) {
+      console.error('🚨 Database health check failed:', error.message);
+      console.log('🔄 Attempting to reconnect...');
+      
+      try {
+        await connectDB();
+      } catch (reconnectError) {
+        console.error('❌ Auto-reconnection failed:', reconnectError.message);
+      }
+    }
+  }, 30000); // Check every 30 seconds
 };
 
 // Initialize database tables
@@ -221,6 +278,8 @@ const initializeTables = async () => {
     
   } catch (error) {
     console.error('❌ Error initializing database tables:', error.message);
+    // Don't throw the error here as it would prevent the connection from being established
+    // The tables will be created when the connection is successful
   }
 };
 
